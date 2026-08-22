@@ -1,0 +1,3 @@
+# requirements.txt
+# PyQt6 doit être installé via le gestionnaire de paquets système
+# sudo apt install python3-pyqt6
