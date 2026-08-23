@@ -1,6 +1,25 @@
-# PipeWire Control Center
+# PipeWire Control Center (PCC)
 
-Interface graphique de configuration avancée pour PipeWire.
+Interface graphique de configuration avancée pour PipeWire, avec notamment gestion fine des samplerates et du buffer, et prise en charge d'AES67.
+
+MISES EN GARDE : 
+
+Cette application a été developpée dans un but personnel, à (très) grand renfort d'IA.
+
+PCC a été testé et est fonctionnnel sous Linux Mint 22.3, Cinnamon/XFCE, avec Pipewire 1.0.5 / Wireplumber 0.4.17 .
+
+Les procédures d'installation ci-dessous sont génériques et fournies à titre indicatif seuleument, elles peuvent nécessiter des ajustements.
+
+A VENIR :
+
+- Personnalisation de l'interface,
+
+- Meilleur support d'AES67,
+
+- Prise en charge d'AVB, dans la mesure du possible,
+
+- Gestion de profils audio permettant égalisation et compression en fonction du contexte
+
 
 ## Fonctionnalités
 
