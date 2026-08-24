@@ -8,11 +8,13 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from pathlib import Path
+from .i18n import I18n
 
 class FrequencyTab(QWidget):
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
+        self.i18n = I18n.instance()
         self._init_ui()
     
     def _init_ui(self):
@@ -20,15 +22,10 @@ class FrequencyTab(QWidget):
         layout.setSpacing(15)
         
         # Fréquences autorisées
-        config_gb = QGroupBox("Fréquences autorisées")
+        self.config_gb = QGroupBox(self.i18n.tr('frequences_autorisees'))
         config_layout = QVBoxLayout()
         
-        config_layout.addWidget(QLabel(
-            "Définit les fréquences que PipeWire peut utiliser.\n"
-            "Le matériel utilisera la plus adaptée au flux en cours.\n"
-            "Survit aux redémarrages.\n"
-            "Fichier : ~/.config/pipewire/pipewire.conf.d/10-clock-rates.conf"
-        ))
+        config_layout.addWidget(QLabel(self.i18n.tr('frequencies_description')))
         
         self.rates_list = QListWidget()
         self.rates_list.setMaximumHeight(150)
@@ -37,65 +34,50 @@ class FrequencyTab(QWidget):
         
         btn_layout = QHBoxLayout()
         
-        self.add_rate_btn = QPushButton("+ Ajouter")
+        self.add_rate_btn = QPushButton(self.i18n.tr('ajouter'))
         self.add_rate_btn.clicked.connect(self._add_rate)
         btn_layout.addWidget(self.add_rate_btn)
         
-        self.remove_rate_btn = QPushButton("- Supprimer")
+        self.remove_rate_btn = QPushButton(self.i18n.tr('supprimer'))
         self.remove_rate_btn.clicked.connect(self._remove_rate)
         btn_layout.addWidget(self.remove_rate_btn)
         
         config_layout.addLayout(btn_layout)
         
         save_layout = QHBoxLayout()
-        self.save_config_btn = QPushButton("💾 Enregistrer")
+        self.save_config_btn = QPushButton(self.i18n.tr('enregistrer'))
         self.save_config_btn.clicked.connect(self._save_config)
         save_layout.addWidget(self.save_config_btn)
         
-        self.remove_config_btn = QPushButton("🗑 Supprimer la configuration")
+        self.remove_config_btn = QPushButton(self.i18n.tr('supprimer_config'))
         self.remove_config_btn.clicked.connect(self._remove_config)
         save_layout.addWidget(self.remove_config_btn)
         
         config_layout.addLayout(save_layout)
-        config_gb.setLayout(config_layout)
-        layout.addWidget(config_gb)
+        self.config_gb.setLayout(config_layout)
+        layout.addWidget(self.config_gb)
         
         # Redémarrage des services
-        restart_gb = QGroupBox("Appliquer les changements")
+        self.restart_gb = QGroupBox(self.i18n.tr('appliquer_changements'))
         restart_layout = QVBoxLayout()
-        restart_layout.addWidget(QLabel(
-            "Redémarre PipeWire et WirePlumber pour prendre en compte\n"
-            "la nouvelle configuration des fréquences autorisées.\n\n"
-            "⚠️ Toute lecture audio sera interrompue."
-        ))
-        self.restart_btn = QPushButton("🔄 Redémarrer PipeWire + WirePlumber")
+        restart_layout.addWidget(QLabel(self.i18n.tr('restart_description')))
+        self.restart_btn = QPushButton(self.i18n.tr('redemarrer_services'))
         self.restart_btn.setStyleSheet("QPushButton { color: #ff9800; font-weight: bold; padding: 8px; }")
         self.restart_btn.clicked.connect(self._restart_services)
         restart_layout.addWidget(self.restart_btn)
-        restart_gb.setLayout(restart_layout)
-        layout.addWidget(restart_gb)
+        self.restart_gb.setLayout(restart_layout)
+        layout.addWidget(self.restart_gb)
         
         # Nettoyage avancé
-        clean_gb = QGroupBox("Nettoyage avancé")
+        self.clean_gb = QGroupBox(self.i18n.tr('nettoyage_avance'))
         clean_layout = QVBoxLayout()
-        clean_layout.addWidget(QLabel(
-            "Supprime tous les fichiers de configuration locaux\n"
-            "pouvant causer des conflits.\n\n"
-            "Cela concerne :\n"
-            "• ~/.config/pipewire/pipewire.conf.d/\n"
-            "• ~/.config/wireplumber/main.lua.d/\n\n"
-            "ℹ️ Le fichier pipewire.conf.d/10-clock-rates.conf\n"
-            "   suffit pour le switching automatique des fréquences.\n"
-            "   Tout autre fichier au même endroit, ou dans\n"
-            "   wireplumber/main.lua.d/, peut interférer et bloquer\n"
-            "   le changement automatique de fréquence."
-        ))
-        self.clean_btn = QPushButton("🧹 Nettoyer toutes les configurations locales")
+        clean_layout.addWidget(QLabel(self.i18n.tr('clean_description')))
+        self.clean_btn = QPushButton(self.i18n.tr('nettoyer_configs'))
         self.clean_btn.setStyleSheet("QPushButton { color: #ef5350; font-weight: bold; padding: 8px; }")
         self.clean_btn.clicked.connect(self._clean_all_configs)
         clean_layout.addWidget(self.clean_btn)
-        clean_gb.setLayout(clean_layout)
-        layout.addWidget(clean_gb)
+        self.clean_gb.setLayout(clean_layout)
+        layout.addWidget(self.clean_gb)
         
         layout.addStretch()
         self.setLayout(layout)
@@ -120,10 +102,10 @@ class FrequencyTab(QWidget):
         available = [r for r in all_rates if int(r) not in current]
         
         if not available:
-            QMessageBox.information(self, "Info", "Toutes les fréquences sont déjà dans la liste")
+            QMessageBox.information(self, self.i18n.tr('info'), self.i18n.tr('all_frequencies_added'))
             return
         
-        rate, ok = QInputDialog.getItem(self, "Ajouter", "Fréquence :", available, 0, False)
+        rate, ok = QInputDialog.getItem(self, self.i18n.tr('add_frequency'), self.i18n.tr('frequency'), available, 0, False)
         if ok and rate:
             item = QListWidgetItem(f"{rate} Hz")
             item.setData(Qt.ItemDataRole.UserRole, int(rate))
@@ -134,44 +116,40 @@ class FrequencyTab(QWidget):
         if item:
             self.rates_list.takeItem(self.rates_list.row(item))
         else:
-            QMessageBox.warning(self, "Erreur", "Sélectionnez une fréquence à supprimer")
+            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('select_frequency'))
     
     def _save_config(self):
         rates = [self.rates_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.rates_list.count())]
         if not rates:
-            QMessageBox.warning(self, "Erreur", "La liste ne peut pas être vide")
+            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('list_empty'))
             return
         
         if self.pw.write_allowed_rates(rates):
-            QMessageBox.information(self, "Succès", 
-                "Configuration enregistrée.\n\n"
-                "Redémarrez les services pour appliquer les changements."
+            QMessageBox.information(self, self.i18n.tr('success'), 
+                self.i18n.tr('config_saved_restart')
             )
         else:
-            QMessageBox.warning(self, "Erreur", "Impossible d'écrire la configuration")
+            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('config_error'))
     
     def _remove_config(self):
-        reply = QMessageBox.question(self, "Confirmation",
-            "Supprimer la configuration persistante ?\n"
-            "Les valeurs par défaut seront rétablies au prochain redémarrage.")
+        reply = QMessageBox.question(self, self.i18n.tr('confirmation'),
+            self.i18n.tr('remove_config_confirm'))
         if reply == QMessageBox.StandardButton.Yes:
             if self.pw.remove_config():
                 self._populate_rates_list()
-                QMessageBox.information(self, "Succès", "Configuration supprimée")
+                QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('config_removed'))
     
     def _restart_services(self):
-        reply = QMessageBox.question(self, "Confirmation",
-            "Redémarrer PipeWire et WirePlumber ?\n\n"
-            "⚠️ Toute lecture audio sera interrompue.")
+        reply = QMessageBox.question(self, self.i18n.tr('confirmation'),
+            self.i18n.tr('restart_confirm') + "\n\n" + self.i18n.tr('restart_warning'))
         if reply == QMessageBox.StandardButton.Yes:
             ok, msg = self.pw.restart_services()
             if ok:
-                QMessageBox.information(self, "Succès", msg)
+                QMessageBox.information(self, self.i18n.tr('success'), msg)
             else:
-                QMessageBox.warning(self, "Erreur", msg)
+                QMessageBox.warning(self, self.i18n.tr('error_title'), msg)
     
     def _clean_all_configs(self):
-        # Vérifier ce qui va être supprimé
         pipewire_dir = Path.home() / '.config' / 'pipewire' / 'pipewire.conf.d'
         wireplumber_dir = Path.home() / '.config' / 'wireplumber' / 'main.lua.d'
         
@@ -182,27 +160,18 @@ class FrequencyTab(QWidget):
             files_to_delete.extend(wireplumber_dir.glob('*.lua'))
         
         if not files_to_delete:
-            QMessageBox.information(self, "Info", 
-                "Aucune configuration locale trouvée.\n"
-                "Rien à nettoyer."
-            )
+            QMessageBox.information(self, self.i18n.tr('info'), self.i18n.tr('no_local_config'))
             return
         
-        # Afficher ce qui va être supprimé
         file_list = '\n'.join(f"  • {f}" for f in files_to_delete)
         
-        reply = QMessageBox.question(self, "Confirmation",
-            f"Les fichiers suivants vont être supprimés :\n\n"
-            f"{file_list}\n\n"
-            f"⚠️ Cette action est irréversible.\n"
-            f"Les services seront redémarrés automatiquement.\n\n"
-            f"Continuer ?"
+        reply = QMessageBox.question(self, self.i18n.tr('confirmation'),
+            self.i18n.tr('clean_confirm').format(file_list=file_list)
         )
         
         if reply != QMessageBox.StandardButton.Yes:
             return
         
-        # Supprimer les fichiers
         errors = []
         for f in files_to_delete:
             try:
@@ -210,7 +179,6 @@ class FrequencyTab(QWidget):
             except Exception as e:
                 errors.append(str(e))
         
-        # Supprimer les dossiers vides
         try:
             if pipewire_dir.exists():
                 pipewire_dir.rmdir()
@@ -235,19 +203,28 @@ class FrequencyTab(QWidget):
             pass
         
         if errors:
-            QMessageBox.warning(self, "Erreur", 
-                f"Erreurs lors de la suppression :\n" + '\n'.join(errors)
+            QMessageBox.warning(self, self.i18n.tr('error_title'), 
+                self.i18n.tr('clean_errors').format(errors='\n'.join(errors))
             )
         else:
-            # Redémarrer les services
             ok, msg = self.pw.restart_services()
             if ok:
                 self._populate_rates_list()
-                QMessageBox.information(self, "Succès", 
-                    "Toutes les configurations locales ont été supprimées.\n"
-                    "Services redémarrés avec la configuration par défaut."
+                QMessageBox.information(self, self.i18n.tr('success'), 
+                    self.i18n.tr('clean_configs_success') + "\n" + msg
                 )
             else:
-                QMessageBox.warning(self, "Erreur", 
-                    f"Fichiers supprimés, mais erreur au redémarrage :\n{msg}"
+                QMessageBox.warning(self, self.i18n.tr('error_title'), 
+                    self.i18n.tr('clean_restart_error').format(msg=msg)
                 )
+    
+    def refresh_language(self):
+        self.config_gb.setTitle(self.i18n.tr('frequences_autorisees'))
+        self.add_rate_btn.setText(self.i18n.tr('ajouter'))
+        self.remove_rate_btn.setText(self.i18n.tr('supprimer'))
+        self.save_config_btn.setText(self.i18n.tr('enregistrer'))
+        self.remove_config_btn.setText(self.i18n.tr('supprimer_config'))
+        self.restart_gb.setTitle(self.i18n.tr('appliquer_changements'))
+        self.restart_btn.setText(self.i18n.tr('redemarrer_services'))
+        self.clean_gb.setTitle(self.i18n.tr('nettoyage_avance'))
+        self.clean_btn.setText(self.i18n.tr('nettoyer_configs'))

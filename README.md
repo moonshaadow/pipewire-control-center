@@ -1,4 +1,5 @@
 # PipeWire Control Center (PCC)
+<<<<<<< HEAD
 
 Interface graphique de configuration avancée pour PipeWire, avec notamment gestion fine des samplerates et du buffer, et prise en charge d'AES67.
 
@@ -20,35 +21,58 @@ A VENIR :
 
 - Gestion de profils audio permettant égalisation et compression en fonction du contexte
 
+=======
 
-## Fonctionnalités
+Advanced graphical configuration interface for PipeWire, featuring fine-grained control of sample rates and buffer sizes, as well as AES67 support.
+>>>>>>> da07098 (Ajout du système i18n complet (FR/EN), configuration UI, comportement fermeture, journal enrichi AES67/PTP)
 
-- **Audio** : sélection du périphérique, monitoring temps réel (fréquence, format, flux), volume global et par flux avec suramplification (150%)
-- **Fréquences** : configuration des taux d'échantillonnage autorisés (switching automatique), redémarrage des services, nettoyage avancé des configurations locales
-- **Buffer** : réglage de la taille de buffer et de la latence avec préréglages (Gaming, AES67, Musique, Vidéo, Bureau)
-- **Périphériques** : liste détaillée, définition du périphérique par défaut, suppression temporaire de nœuds
-- **AES67** : activation/désactivation, configuration émetteur/récepteur, synchronisation PTP (linuxptp), multicast
-- **Profils** : sauvegarde et chargement de configurations (rate, quantum, min/max buffer)
-- **État** : informations système (version, buffer, latence, xruns), journal des événements (changements de fréquence, périphérique, flux)
+WARNINGS:
+
+This application was developed for personal use, with significant assistance from AI.
+
+PCC has been tested and is functional on Linux Mint 22.3, Cinnamon/XFCE, with PipeWire 1.0.5 / WirePlumber 0.4.17.
+
+The installation procedures below are generic and provided for informational purposes only; they may require adjustments.
+
+COMING SOON:
+
+- UI customization,
+
+- Improved AES67 support,
+
+- AVB support, as far as possible,
+
+- Audio profile management with equalization and compression based on context
+
+
+## Features
+
+- **Audio**: device selection, real-time monitoring (frequency, format, streams), global and per-stream volume with 150% boost
+- **Frequencies**: configuration of allowed sample rates (automatic switching), service restart, advanced cleanup of local configurations
+- **Buffer**: buffer size and latency adjustment with presets (Gaming, AES67, Music, Video, Desktop)
+- **Devices**: detailed list, default device selection, temporary node removal
+- **AES67**: enable/disable, sender/receiver configuration, PTP synchronization (linuxptp), multicast
+- **Profiles**: save and load configurations (rate, quantum, min/max buffer)
+- **Status**: system information (version, buffer, latency, xruns), event log (frequency, device, and stream changes)
 
 ## Installation
 
 chmod +x install.sh
 ./install.sh
 
-Le script détecte automatiquement votre distribution et installe les dépendances nécessaires.
+The script automatically detects your distribution and installs the required dependencies.
 
-## Dépendances système
+## System Dependencies
 
-| Paquet | Description |
-|--------|-------------|
-| pipewire | Serveur audio |
-| wireplumber | Gestionnaire de session |
-| python3-pyqt6 | Interface graphique |
-| rsync | Copie des fichiers (installation) |
-| linuxptp | Synchronisation PTP (optionnel, pour AES67) |
+| Package | Description |
+|---------|-------------|
+| pipewire | Audio server |
+| wireplumber | Session manager |
+| python3-pyqt6 | Graphical interface |
+| rsync | File copying (installation) |
+| linuxptp | PTP synchronization (optional, for AES67) |
 
-### Installation par distribution
+### Installation by Distribution
 
 # Debian / Ubuntu / Linux Mint
 sudo apt install pipewire wireplumber python3-pyqt6 rsync
@@ -59,60 +83,60 @@ sudo dnf install pipewire wireplumber python3-pyqt6 rsync
 # Arch / Manjaro
 sudo pacman -S pipewire wireplumber python-pyqt6 rsync
 
-## Emplacements
+## Locations
 
-| Élément | Chemin |
-|---------|--------|
+| Item | Path |
+|------|------|
 | Application | ~/.local/share/pipewire-control-center/ |
-| Exécutable | ~/.local/bin/pipewire-control-center |
-| Icône | ~/.local/share/icons/hicolor/scalable/apps/pipewire-control-center.svg |
-| Lanceur | ~/.local/share/applications/pipewire-control-center.desktop |
-| Configuration PipeWire | ~/.config/pipewire/pipewire.conf.d/10-clock-rates.conf |
-| Configuration AES67 | ~/.config/pipewire/pipewire.conf.d/20-aes67-session.conf |
-| Profils utilisateur | ~/.config/pipewire-control-center/profiles/ |
+| Executable | ~/.local/bin/pipewire-control-center |
+| Icon | ~/.local/share/icons/hicolor/scalable/apps/pipewire-control-center.svg |
+| Launcher | ~/.local/share/applications/pipewire-control-center.desktop |
+| PipeWire Configuration | ~/.config/pipewire/pipewire.conf.d/10-clock-rates.conf |
+| AES67 Configuration | ~/.config/pipewire/pipewire.conf.d/20-aes67-session.conf |
+| User Profiles | ~/.config/pipewire-control-center/profiles/ |
 
-## Désinstallation
+## Uninstallation
 
 chmod +x uninstall.sh
 ./uninstall.sh
 
-## Utilisation
+## Usage
 
-Lancez pipewire-control-center depuis le terminal ou via le menu Applications (catégorie Audio).
+Launch pipewire-control-center from the terminal or via the Applications menu (Audio category).
 
-L'application reste dans la barre système (systray) après fermeture de la fenêtre.
+The application remains in the system tray after the window is closed.
 
-## Configuration manuelle
+## Manual Configuration
 
-Le fichier de configuration généré se trouve dans ~/.config/pipewire/pipewire.conf.d/10-clock-rates.conf.
+The generated configuration file is located at ~/.config/pipewire/pipewire.conf.d/10-clock-rates.conf.
 
-Format :
+Format:
 context.properties = {
     default.clock.allowed-rates = [ 44100 48000 88200 96000 176400 192000 ]
 }
 
-## Structure du projet
+## Project Structure
 
 pipewire-control-center/
 ├── LICENSE
 ├── README.md
-├── main.py                 # Point d'entrée avec systray
-├── pipewire_manager.py     # API PipeWire (pw-metadata, pw-dump, wpctl)
-├── config_manager.py       # Gestion des profils JSON
-├── install.sh              # Script d'installation
-├── uninstall.sh            # Script de désinstallation
-├── requirements.txt        # Dépendances Python
+├── main.py                 # Entry point with system tray
+├── pipewire_manager.py     # PipeWire API (pw-metadata, pw-dump, wpctl)
+├── config_manager.py       # JSON profile management
+├── install.sh              # Installation script
+├── uninstall.sh            # Uninstallation script
+├── requirements.txt        # Python dependencies
 ├── ui/
-│   ├── __init__.py         # Package UI
-│   ├── main_window.py      # Fenêtre principale avec navigation
-│   ├── audio_tab.py        # Onglet Audio (sorties, entrées, flux)
-│   ├── frequency_tab.py    # Onglet Fréquences
-│   ├── buffer_tab.py       # Onglet Buffer/Latence
-│   ├── devices_tab.py      # Onglet Périphériques
-│   ├── aes67_tab.py        # Onglet AES67
-│   ├── profiles_tab.py     # Onglet Profils
-│   ├── status_tab.py       # Onglet État/Journal
-│   └── icon_utils.py       # Utilitaires d'icônes partagés
+│   ├── __init__.py         # UI package
+│   ├── main_window.py      # Main window with navigation
+│   ├── audio_tab.py        # Audio tab (outputs, inputs, streams)
+│   ├── frequency_tab.py    # Frequencies tab
+│   ├── buffer_tab.py       # Buffer/Latency tab
+│   ├── devices_tab.py      # Devices tab
+│   ├── aes67_tab.py        # AES67 tab
+│   ├── profiles_tab.py     # Profiles tab
+│   ├── status_tab.py       # Status/Log tab
+│   └── icon_utils.py       # Shared icon utilities
 └── icons/
     ├── hdmi.svg
     ├── headphone.svg
@@ -125,20 +149,20 @@ pipewire-control-center/
     ├── usb-color.svg
     └── pcc.png
 
-## Notes techniques
+## Technical Notes
 
-### Cache pw-dump
-L'application utilise un cache de 200ms pour les données pw-dump afin de limiter la charge système. Le cache est invalidé automatiquement lors des actions utilisateur.
+### pw-dump Cache
+The application uses a 200ms cache for pw-dump data to limit system load. The cache is automatically invalidated upon user actions.
 
-### Timers de rafraîchissement
-- **Audio** : 200ms (5 FPS) - volumes, flux, états
-- **Buffer** : 2s - buffers ALSA
-- **AES67** : 2s - statut PTP et configuration
-- **État** : 1.5s - changements de fréquence/périphérique/flux
+### Refresh Timers
+- **Audio**: 200ms (5 FPS) - volumes, streams, states
+- **Buffer**: 2s - ALSA buffers
+- **AES67**: 2s - PTP status and configuration
+- **Status**: 1.5s - frequency/device/stream changes
 
 ### Permissions
-L'application fonctionne en espace utilisateur sans nécessiter de privilèges root, sauf pour l'installation de linuxptp (via pkexec).
+The application runs in user space without requiring root privileges, except for installing linuxptp (via pkexec).
 
-## Licence
+## License
 
 MIT © 2026 A. Vartanian

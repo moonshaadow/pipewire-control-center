@@ -6,11 +6,13 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
+from .i18n import I18n
 
 class BufferTab(QWidget):
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
+        self.i18n = I18n.instance()
         self._init_ui()
         self.load_current()
         
@@ -23,7 +25,7 @@ class BufferTab(QWidget):
         layout.setSpacing(12)
         
         # Buffer global
-        buf_gb = QGroupBox("Buffer global PipeWire")
+        self.buf_gb = QGroupBox(self.i18n.tr('buffer_global'))
         buf_layout = QVBoxLayout()
         
         self.current_buf_lbl = QLabel()
@@ -36,44 +38,44 @@ class BufferTab(QWidget):
         self.quantum_spin = QSpinBox()
         self.quantum_spin.setRange(32, 8192)
         self.quantum_spin.setSingleStep(32)
-        self.quantum_spin.setSuffix(" échantillons")
+        self.quantum_spin.setSuffix(" " + self.i18n.tr('samples'))
         self.quantum_spin.valueChanged.connect(self._update_latency_estimate)
-        buf_form.addRow("Buffer global :", self.quantum_spin)
+        buf_form.addRow(self.i18n.tr('buffer_global') + ":", self.quantum_spin)
         
         self.min_spin = QSpinBox()
         self.min_spin.setRange(1, 1024)
-        self.min_spin.setSuffix(" échantillons")
-        buf_form.addRow("Buffer minimum :", self.min_spin)
+        self.min_spin.setSuffix(" " + self.i18n.tr('samples'))
+        buf_form.addRow(self.i18n.tr('buffer_minimum'), self.min_spin)
         
         self.max_spin = QSpinBox()
         self.max_spin.setRange(2048, 16384)
-        self.max_spin.setSuffix(" échantillons")
-        buf_form.addRow("Buffer maximum :", self.max_spin)
+        self.max_spin.setSuffix(" " + self.i18n.tr('samples'))
+        buf_form.addRow(self.i18n.tr('buffer_maximum'), self.max_spin)
         
         self.latency_lbl = QLabel()
         self.latency_lbl.setFont(QFont("Monospace", 9))
         self.latency_lbl.setStyleSheet("color: #aaa;")
-        buf_form.addRow("Latence estimée :", self.latency_lbl)
+        buf_form.addRow(self.i18n.tr('latence_estimee'), self.latency_lbl)
         
         buf_layout.addLayout(buf_form)
         
-        apply_btn = QPushButton("Appliquer")
-        apply_btn.clicked.connect(self._apply)
-        buf_layout.addWidget(apply_btn)
+        self.apply_btn = QPushButton(self.i18n.tr('apply'))
+        self.apply_btn.clicked.connect(self._apply)
+        buf_layout.addWidget(self.apply_btn)
         
-        buf_gb.setLayout(buf_layout)
-        layout.addWidget(buf_gb)
+        self.buf_gb.setLayout(buf_layout)
+        layout.addWidget(self.buf_gb)
         
         # Préréglages
-        preset_gb = QGroupBox("Préréglages")
+        self.preset_gb = QGroupBox(self.i18n.tr('presets'))
         preset_layout = QHBoxLayout()
         
         presets = [
-            ("🎮 Gaming/Live Sound", 128),
-            ("🌐 Réseau/AES67", 256),
-            ("🎵 Musique", 512),
-            ("🎬 Vidéo", 1024),
-            ("💻 Bureau", 2048),
+            (self.i18n.tr('preset_gaming'), 128),
+            (self.i18n.tr('preset_network'), 256),
+            (self.i18n.tr('preset_music'), 512),
+            (self.i18n.tr('preset_video'), 1024),
+            (self.i18n.tr('preset_desktop'), 2048),
         ]
         
         preset_style = """
@@ -91,28 +93,27 @@ class BufferTab(QWidget):
             btn.clicked.connect(lambda _, v=value: self.quantum_spin.setValue(v))
             preset_layout.addWidget(btn)
         
-        preset_gb.setLayout(preset_layout)
-        layout.addWidget(preset_gb)
+        self.preset_gb.setLayout(preset_layout)
+        layout.addWidget(self.preset_gb)
         
         # Buffers des périphériques
-        devices_gb = QGroupBox("Buffers ALSA des périphériques")
+        self.devices_gb = QGroupBox(self.i18n.tr('buffers_alsa'))
         devices_layout = QVBoxLayout()
         
         self.devices_tree = QTreeWidget()
-        self.devices_tree.setHeaderLabels(["Périphérique", "Buffer ALSA", "Périodes", "Total"])
+        self.devices_tree.setHeaderLabels([self.i18n.tr('description'), "ALSA", self.i18n.tr('channels'), "Total"])
         self.devices_tree.setColumnWidth(0, 200)
         self.devices_tree.setStyleSheet("QTreeWidget { background-color: #2a2a2a; color: #aaa; }")
         devices_layout.addWidget(self.devices_tree)
         
-        note_lbl = QLabel("ℹ Le buffer global doit être cohérent avec le buffer ALSA du périphérique actif.\n"
-                          "Un buffer global trop grand par rapport au buffer ALSA augmente la latence sans bénéfice.")
+        note_lbl = QLabel(self.i18n.tr('buffer_note'))
         note_lbl.setFont(QFont("Monospace", 8))
         note_lbl.setStyleSheet("color: #888;")
         note_lbl.setWordWrap(True)
         devices_layout.addWidget(note_lbl)
         
-        devices_gb.setLayout(devices_layout)
-        layout.addWidget(devices_gb)
+        self.devices_gb.setLayout(devices_layout)
+        layout.addWidget(self.devices_gb)
         
         layout.addStretch()
         self.setLayout(layout)
@@ -127,7 +128,7 @@ class BufferTab(QWidget):
             self.min_spin.setValue(min_q)
             self.max_spin.setValue(max_q)
             
-            self.current_buf_lbl.setText(f"Buffer actuel : {quantum} échantillons")
+            self.current_buf_lbl.setText(self.i18n.tr('buffer_actuel').format(quantum))
             self._update_latency_estimate()
         except Exception as e:
             print(f"Erreur chargement buffer: {e}")
@@ -139,7 +140,7 @@ class BufferTab(QWidget):
         rate = self.pw.get_rate()
         quantum = self.quantum_spin.value()
         latency_ms = (quantum / rate) * 1000
-        self.latency_lbl.setText(f"{latency_ms:.1f} ms à {rate} Hz")
+        self.latency_lbl.setText(f"{latency_ms:.1f} {self.i18n.tr('milliseconds')} ({rate} {self.i18n.tr('hz')})")
     
     def _apply(self):
         quantum = self.quantum_spin.value()
@@ -152,19 +153,18 @@ class BufferTab(QWidget):
         ok &= self.pw.set_max_quantum(max_q)
         
         if ok:
-            self.current_buf_lbl.setText(f"Buffer actuel : {quantum} échantillons")
-            QMessageBox.information(self, "Succès", "Buffer appliqué")
+            self.current_buf_lbl.setText(self.i18n.tr('buffer_actuel').format(quantum))
+            QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('buffer_applied'))
         else:
-            QMessageBox.warning(self, "Erreur", "Échec de l'application")
+            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('buffer_apply_error'))
     
     def _refresh_device_buffers(self):
-        """Lit les buffers ALSA des périphériques et met à jour l'affichage"""
         try:
             devices = self.pw.get_devices()
+            data = self.pw._get_pw_dump()
             self.devices_tree.clear()
             
             for device in devices:
-                data = self.pw._get_pw_dump()
                 for item in data:
                     if item.get('id') == device['id']:
                         props = item.get('info', {}).get('props', {})
@@ -194,6 +194,19 @@ class BufferTab(QWidget):
                         break
         except Exception:
             pass
+    
+    def refresh_language(self):
+        self.buf_gb.setTitle(self.i18n.tr('buffer_global'))
+        self.preset_gb.setTitle(self.i18n.tr('presets'))
+        self.devices_gb.setTitle(self.i18n.tr('buffers_alsa'))
+        self.apply_btn.setText(self.i18n.tr('apply'))
+        self.quantum_spin.setSuffix(" " + self.i18n.tr('samples'))
+        self.min_spin.setSuffix(" " + self.i18n.tr('samples'))
+        self.max_spin.setSuffix(" " + self.i18n.tr('samples'))
+        self.devices_tree.setHeaderLabels([self.i18n.tr('description'), "ALSA", self.i18n.tr('channels'), "Total"])
+        self._update_latency_estimate()
+        if self.quantum_spin.value() > 0:
+            self.current_buf_lbl.setText(self.i18n.tr('buffer_actuel').format(self.quantum_spin.value()))
     
     def shutdown(self):
         self.timer.stop()
