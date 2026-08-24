@@ -94,23 +94,33 @@ class DevicesTab(QWidget):
     
     def _restore_header_state(self):
         """Restaure la largeur des colonnes sauvegardée"""
-        settings = QSettings('PipeWireControlCenter', 'DevicesTab')
-        
-        # Restaurer l'état des en-têtes du tableau des périphériques
-        devices_state = settings.value('devices_header_state')
-        if devices_state is not None:
-            self.tree.header().restoreState(devices_state)
-        
-        # Restaurer l'état des en-têtes du tableau des applications
-        apps_state = settings.value('apps_header_state')
-        if apps_state is not None:
-            self.apps_tree.header().restoreState(apps_state)
+        try:
+            settings = QSettings('PipeWireControlCenter', 'DevicesTab')
+            
+            # Restaurer l'état des en-têtes du tableau des périphériques
+            devices_state = settings.value('devices_header_state')
+            if devices_state is not None:
+                self.tree.header().restoreState(devices_state)
+                self.logger.debug("État des colonnes périphériques restauré")
+            
+            # Restaurer l'état des en-têtes du tableau des applications
+            apps_state = settings.value('apps_header_state')
+            if apps_state is not None:
+                self.apps_tree.header().restoreState(apps_state)
+                self.logger.debug("État des colonnes applications restauré")
+        except Exception as e:
+            self.logger.error(f"Erreur restauration colonnes: {e}")
     
     def _save_header_state(self):
         """Sauvegarde la largeur des colonnes"""
-        settings = QSettings('PipeWireControlCenter', 'DevicesTab')
-        settings.setValue('devices_header_state', self.tree.header().saveState())
-        settings.setValue('apps_header_state', self.apps_tree.header().saveState())
+        try:
+            settings = QSettings('PipeWireControlCenter', 'DevicesTab')
+            settings.setValue('devices_header_state', self.tree.header().saveState())
+            settings.setValue('apps_header_state', self.apps_tree.header().saveState())
+            settings.sync()  # Force l'écriture immédiate sur le disque
+            self.logger.debug("État des colonnes sauvegardé")
+        except Exception as e:
+            self.logger.error(f"Erreur sauvegarde colonnes: {e}")
     
     def showEvent(self, event):
         """Démarre le timer quand l'onglet devient visible"""
@@ -119,9 +129,10 @@ class DevicesTab(QWidget):
         self.refresh()
     
     def hideEvent(self, event):
-        """Arrête le timer quand l'onglet n'est plus visible"""
+        """Arrête le timer et sauvegarde les colonnes quand l'onglet n'est plus visible"""
         super().hideEvent(event)
         self.timer.stop()
+        self._save_header_state()
     
     def refresh(self):
         self.pw.invalidate_cache()
