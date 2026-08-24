@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QLabel, QToolButton, QApplication
 )
 from PyQt6.QtGui import QPalette, QIcon, QAction
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSettings
 
 from pipewire_manager import PipeWireManager
 from config_manager import ConfigManager
@@ -346,6 +346,24 @@ class MainWindow(QMainWindow):
             self.devices_tab.refresh(), self.statusBar().showMessage(self.i18n.tr('profile_loaded'), 5000)
         ))
         self.statusBar().showMessage(self.i18n.tr('ready').format(self.pw.get_version()), 5000)
+        
+        # Restaurer la géométrie de la fenêtre
+        self._restore_geometry()
+    
+    def _restore_geometry(self):
+        """Restaure la taille et la position de la fenêtre"""
+        settings = QSettings('PipeWireControlCenter', 'MainWindow')
+        geometry = settings.value('geometry')
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+        else:
+            # Taille par défaut si pas de sauvegarde
+            self.resize(900, 600)
+    
+    def _save_geometry(self):
+        """Sauvegarde la taille et la position de la fenêtre"""
+        settings = QSettings('PipeWireControlCenter', 'MainWindow')
+        settings.setValue('geometry', self.saveGeometry())
     
     def _rebuild_stack(self):
         while self.stack.count() > 0:
@@ -478,6 +496,9 @@ class MainWindow(QMainWindow):
         self.btn_group.idClicked.connect(self._on_nav)
     
     def closeEvent(self, event):
+        # Sauvegarder la géométrie avant de fermer
+        self._save_geometry()
+        
         behavior = self.ui_config.config.get('close_behavior', 'tray')
         
         if behavior == 'quit':
