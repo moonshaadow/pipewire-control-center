@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QPixmap
 from .icon_utils import get_device_icon_path
+from .i18n import I18n
 
 # --- Sliders ---
 class ClickSlider(QSlider):
@@ -41,6 +42,7 @@ class DeviceCard(QFrame):
     def __init__(self, device, is_selected=False):
         super().__init__()
         self.device = device
+        self.i18n = I18n.instance()
         self.setProperty("selected", is_selected)
         self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -71,7 +73,7 @@ class DeviceCard(QFrame):
         layout.addWidget(self.name_lbl)
         
         if device.get('state') == 'running':
-            badge = QLabel("● ACTIF")
+            badge = QLabel("● " + self.i18n.tr('active'))
             badge.setFont(QFont("Monospace", 6))
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
             badge.setStyleSheet("color: #4CAF50;")
@@ -120,6 +122,7 @@ class DeviceVolumeRow(QWidget):
         super().__init__()
         self.device = device
         self.pw = pw
+        self.i18n = I18n.instance()
         self._init_ui()
     
     def _init_ui(self):
@@ -179,7 +182,7 @@ class DeviceVolumeRow(QWidget):
         
         boost_layout = QHBoxLayout()
         boost_layout.addStretch()
-        self.boost_cb = QCheckBox("150%")
+        self.boost_cb = QCheckBox(self.i18n.tr('boost_150'))
         self.boost_cb.setFont(QFont("Monospace", 7))
         self.boost_cb.setStyleSheet("color: #888;")
         self.boost_cb.toggled.connect(self._on_boost)
@@ -234,6 +237,7 @@ class DeviceInputRow(QWidget):
         super().__init__()
         self.device = device
         self.pw = pw
+        self.i18n = I18n.instance()
         self._init_ui()
     
     def _init_ui(self):
@@ -334,6 +338,7 @@ class StreamRow(QFrame):
     def __init__(self, stream):
         super().__init__()
         self.stream = stream
+        self.i18n = I18n.instance()
         self.setFrameStyle(QFrame.Shape.NoFrame)
         self.setStyleSheet("background-color: #2a2a2a; border-radius: 4px; margin: 1px 0;")
         self.setFixedHeight(36)
@@ -398,17 +403,19 @@ class AudioTab(QWidget):
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
+        self.i18n = I18n.instance()
         self.device_rows = {}
         self.input_rows = {}
         self.stream_rows = {}
         self.selected_output = None
         self.selected_input = None
+        self._prev_device_names = set()
         self._init_ui()
         self.refresh_devices()
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._update)
-        self.timer.start(100)  # 10 FPS pour une meilleure réactivité
+        self.timer.start(100)
     
     def _init_ui(self):
         layout = QVBoxLayout()
@@ -424,7 +431,7 @@ class AudioTab(QWidget):
         self.sub_btn_group.setExclusive(True)
         
         self.sub_buttons = []
-        sub_pages = [("Sorties", 0), ("Entrées", 1)]
+        sub_pages = [(self.i18n.tr('sorties'), 0), (self.i18n.tr('entrees'), 1)]
         
         sub_btn_style = """
             QPushButton {
@@ -466,7 +473,7 @@ class AudioTab(QWidget):
         output_layout.setSpacing(2)
         output_layout.setContentsMargins(0, 0, 0, 0)
         
-        output_gb = QGroupBox("Périphériques de sortie")
+        self.output_gb = QGroupBox(self.i18n.tr('peripheriques_sortie'))
         output_gb_layout = QVBoxLayout()
         output_gb_layout.setSpacing(2)
         
@@ -481,8 +488,8 @@ class AudioTab(QWidget):
         self.output_scroll.setWidget(self.output_widget)
         self.output_scroll.setStyleSheet("QScrollArea { border: none; } QScrollBar:vertical { width: 0px; }")
         output_gb_layout.addWidget(self.output_scroll)
-        output_gb.setLayout(output_gb_layout)
-        output_layout.addWidget(output_gb)
+        self.output_gb.setLayout(output_gb_layout)
+        output_layout.addWidget(self.output_gb)
         self.output_tab.setLayout(output_layout)
         self.sub_stack.addWidget(self.output_tab)
         
@@ -492,7 +499,7 @@ class AudioTab(QWidget):
         input_layout.setSpacing(2)
         input_layout.setContentsMargins(0, 0, 0, 0)
         
-        input_gb = QGroupBox("Périphériques d'entrée")
+        self.input_gb = QGroupBox(self.i18n.tr('peripheriques_entree'))
         input_gb_layout = QVBoxLayout()
         input_gb_layout.setSpacing(2)
         
@@ -507,8 +514,8 @@ class AudioTab(QWidget):
         self.input_scroll.setWidget(self.input_widget)
         self.input_scroll.setStyleSheet("QScrollArea { border: none; } QScrollBar:vertical { width: 0px; }")
         input_gb_layout.addWidget(self.input_scroll)
-        input_gb.setLayout(input_gb_layout)
-        input_layout.addWidget(input_gb)
+        self.input_gb.setLayout(input_gb_layout)
+        input_layout.addWidget(self.input_gb)
         self.input_tab.setLayout(input_layout)
         self.sub_stack.addWidget(self.input_tab)
         
@@ -519,7 +526,7 @@ class AudioTab(QWidget):
         self.sub_btn_group.idClicked.connect(self.sub_stack.setCurrentIndex)
         
         # Flux actifs
-        flux_gb = QGroupBox("Flux actifs")
+        self.flux_gb = QGroupBox(self.i18n.tr('flux_actifs'))
         flux_layout = QVBoxLayout()
         
         self.streams_widget = QWidget()
@@ -535,15 +542,15 @@ class AudioTab(QWidget):
         self.streams_scroll.setStyleSheet("QScrollArea { border: none; }")
         flux_layout.addWidget(self.streams_scroll)
         
-        self.empty_lbl = QLabel("Aucun flux actif")
+        self.empty_lbl = QLabel(self.i18n.tr('aucun_flux'))
         self.empty_lbl.setFont(QFont("Monospace", 9))
         self.empty_lbl.setStyleSheet("color: #555;")
         self.empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_lbl.hide()
         flux_layout.addWidget(self.empty_lbl)
         
-        flux_gb.setLayout(flux_layout)
-        layout.addWidget(flux_gb)
+        self.flux_gb.setLayout(flux_layout)
+        layout.addWidget(self.flux_gb)
         
         self.setLayout(layout)
     
@@ -606,6 +613,11 @@ class AudioTab(QWidget):
             self.selected_input = active
             for device in sources:
                 self.input_rows[device['name']].set_selected(device.get('id') == active.get('id'))
+        
+        # Mettre à jour les noms connus
+        current_names = set(self.device_rows.keys()) | set(self.input_rows.keys())
+        if current_names != self._prev_device_names:
+            self._prev_device_names = current_names
     
     def _find_active_sink(self, sinks):
         active = next((d for d in sinks if d.get('is_default')), None)
@@ -633,7 +645,6 @@ class AudioTab(QWidget):
         return sources[0] if sources else None
     
     def _update(self):
-        # Ne pas rafraîchir pendant que l'utilisateur manipule un slider
         if any(row.slider.is_dragging() for row in self.device_rows.values()):
             return
         if any(row.slider.is_dragging() for row in self.input_rows.values()):
@@ -641,8 +652,19 @@ class AudioTab(QWidget):
         if any(row.slider.is_dragging() for row in self.stream_rows.values()):
             return
         
+        # Invalider le cache pour détecter les changements JACK
+        self.pw.invalidate_cache()
         data = self.pw._get_pw_dump()
-        self._refresh_devices_silent(data)
+        
+        # Vérifier si les périphériques ont changé
+        devices = self.pw.get_devices()
+        current_names = {d['name'] for d in devices}
+        
+        if current_names != self._prev_device_names:
+            self.refresh_devices()
+        else:
+            self._refresh_devices_silent(data)
+        
         self._update_streams(data)
     
     def _refresh_devices_silent(self, data):
@@ -762,6 +784,14 @@ class AudioTab(QWidget):
     
     def load_current(self):
         self.refresh_devices()
+    
+    def refresh_language(self):
+        self.sub_buttons[0].setText(self.i18n.tr('sorties'))
+        self.sub_buttons[1].setText(self.i18n.tr('entrees'))
+        self.output_gb.setTitle(self.i18n.tr('peripheriques_sortie'))
+        self.input_gb.setTitle(self.i18n.tr('peripheriques_entree'))
+        self.flux_gb.setTitle(self.i18n.tr('flux_actifs'))
+        self.empty_lbl.setText(self.i18n.tr('aucun_flux'))
     
     def shutdown(self):
         self.timer.stop()
