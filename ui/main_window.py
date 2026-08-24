@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QDialog, QDialogButtonBox, QFormLayout, QComboBox, QCheckBox,
     QLabel, QToolButton, QApplication
 )
-from PyQt6.QtGui import QPalette, QIcon, QAction
+from PyQt6.QtGui import QPalette, QIcon, QAction, QKeySequence, QShortcut
 from PyQt6.QtCore import Qt, QSettings
 
 from pipewire_manager import PipeWireManager
@@ -349,6 +349,9 @@ class MainWindow(QMainWindow):
         
         # Restaurer la géométrie de la fenêtre
         self._restore_geometry()
+        
+        # Installer les raccourcis clavier
+        self._install_shortcuts()
     
     def _restore_geometry(self):
         """Restaure la taille et la position de la fenêtre"""
@@ -357,13 +360,80 @@ class MainWindow(QMainWindow):
         if geometry is not None:
             self.restoreGeometry(geometry)
         else:
-            # Taille par défaut si pas de sauvegarde
             self.resize(900, 600)
     
     def _save_geometry(self):
         """Sauvegarde la taille et la position de la fenêtre"""
         settings = QSettings('PipeWireControlCenter', 'MainWindow')
         settings.setValue('geometry', self.saveGeometry())
+    
+    def _install_shortcuts(self):
+        """Installe les raccourcis clavier"""
+        # Ctrl+1 à Ctrl+7 : changer d'onglet
+        for i in range(1, 8):
+            shortcut = QShortcut(QKeySequence(f"Ctrl+{i}"), self)
+            shortcut.activated.connect(lambda idx=i-1: self._goto_tab(idx))
+        
+        # Ctrl+R : rafraîchir l'onglet actuel
+        refresh_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
+        refresh_shortcut.activated.connect(self._refresh_current_tab)
+        
+        # F5 : rafraîchir les périphériques
+        f5_shortcut = QShortcut(QKeySequence("F5"), self)
+        f5_shortcut.activated.connect(self._refresh_all)
+        
+        # Ctrl+Q : quitter
+        quit_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
+        quit_shortcut.activated.connect(self._quit_app)
+    
+    def _goto_tab(self, idx):
+        """Va à l'onglet spécifié par l'index"""
+        all_tab_keys = ['output', 'frequencies', 'buffer', 'devices', 'profiles', 'aes67', 'status']
+        visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
+        
+        if idx < len(visible_keys):
+            self.stack.setCurrentIndex(idx)
+            if idx < len(self.buttons):
+                self.buttons[idx].setChecked(True)
+            key = visible_keys[idx]
+            if key == 'status':
+                self.status_tab.refresh()
+            elif key == 'devices':
+                self.devices_tab.refresh()
+    
+    def _refresh_current_tab(self):
+        """Rafraîchit l'onglet actuellement affiché"""
+        current_idx = self.stack.currentIndex()
+        all_tab_keys = ['output', 'frequencies', 'buffer', 'devices', 'profiles', 'aes67', 'status']
+        visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
+        
+        if current_idx < len(visible_keys):
+            key = visible_keys[current_idx]
+            if key == 'devices':
+                self.devices_tab.refresh()
+            elif key == 'status':
+                self.status_tab.refresh()
+            elif key == 'output':
+                self.audio_tab.refresh_devices()
+            elif key == 'buffer':
+                self.buffer_tab.load_current()
+            elif key == 'frequencies':
+                self.frequency_tab._populate_rates_list()
+    
+    def _refresh_all(self):
+        """Rafraîchit tout"""
+        self.audio_tab.refresh_devices()
+        self.devices_tab.refresh()
+        self.status_tab.refresh()
+        self.statusBar().showMessage(self.i18n.tr('rafraichir'), 2000)
+    
+    def _quit_app(self):
+        """Quitte proprement l'application"""
+        self._save_geometry()
+        self.audio_tab.shutdown()
+        self.status_tab.shutdown()
+        self.aes67_tab.shutdown()
+        QApplication.quit()
     
     def _rebuild_stack(self):
         while self.stack.count() > 0:
