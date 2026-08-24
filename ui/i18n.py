@@ -20,6 +20,7 @@ T = {
         'sorties': 'Sorties', 'entrees': 'Entrées', 'flux_actifs': 'Flux actifs',
         'aucun_flux': 'Aucun flux actif', 'peripheriques_sortie': 'Périphériques de sortie',
         'peripheriques_entree': "Périphériques d'entrée", 'boost_150': '150%',
+        'applications': 'Applications',
         'frequences_autorisees': 'Fréquences autorisées', 'ajouter': '+ Ajouter',
         'supprimer': '- Supprimer', 'enregistrer': '💾 Enregistrer',
         'supprimer_config': '🗑 Supprimer la configuration',
@@ -120,6 +121,7 @@ T = {
         'category_aes67': 'AES67', 'category_ptp': 'PTP',
         'auto_scroll_on': 'Défilement auto: ON', 'auto_scroll_off': 'Défilement auto: OFF',
         'log': 'Journal', 'clear_log': 'Effacer le journal',
+        'refresh_sys': 'Rafraîchir les informations système',
         'frequencies_description': "Définit les fréquences que PipeWire peut utiliser.\nLe matériel utilisera la plus adaptée au flux en cours.\nSurvit aux redémarrages.\nFichier : ~/.config/pipewire/pipewire.conf.d/10-clock-rates.conf",
         'restart_description': "Redémarre PipeWire et WirePlumber pour prendre en compte\nla nouvelle configuration des fréquences autorisées.\n\n⚠️ Toute lecture audio sera interrompue.",
         'clean_description': "Supprime tous les fichiers de configuration locaux\npouvant causer des conflits.\n\nCela concerne :\n• ~/.config/pipewire/pipewire.conf.d/\n• ~/.config/wireplumber/main.lua.d/\n\nℹ️ Le fichier pipewire.conf.d/10-clock-rates.conf\n   suffit pour le switching automatique des fréquences.\n   Tout autre fichier au même endroit, ou dans\n   wireplumber/main.lua.d/, peut interférer et bloquer\n   le changement automatique de fréquence.",
@@ -141,7 +143,11 @@ T = {
         'default_rates': "Par défaut (48000 uniquement)",
         'detected': "détectée(s)",
         'since_start': "{total} (depuis démarrage)",
-        'refresh_sys': 'Rafraîchir les informations système'
+        'app_nodes': "Nœuds d'application",
+        'application': 'Application',
+        'linked_device': 'Périphérique lié',
+        'sortie': 'Sortie',
+        'entree': 'Entrée'
     },
     'en': {
         'output': 'Audio', 'frequencies': 'Frequencies', 'buffer': 'Buffer',
@@ -162,6 +168,7 @@ T = {
         'frequences_autorisees': 'Allowed frequencies', 'ajouter': '+ Add',
         'supprimer': '- Remove', 'enregistrer': '💾 Save',
         'supprimer_config': '🗑 Delete configuration',
+        'applications': 'Applications',
         'appliquer_changements': 'Apply changes',
         'redemarrer_services': '🔄 Restart PipeWire + WirePlumber',
         'nettoyage_avance': 'Advanced cleanup',
@@ -259,6 +266,7 @@ T = {
         'category_aes67': 'AES67', 'category_ptp': 'PTP',
         'auto_scroll_on': 'Auto-scroll: ON', 'auto_scroll_off': 'Auto-scroll: OFF',
         'log': 'Log', 'clear_log': 'Clear log',
+        'refresh_sys': 'Refresh system information',
         'frequencies_description': "Defines the frequencies PipeWire can use.\nThe hardware will use the most suitable one for the current stream.\nSurvives restarts.\nFile: ~/.config/pipewire/pipewire.conf.d/10-clock-rates.conf",
         'restart_description': "Restarts PipeWire and WirePlumber to apply\nthe new allowed frequencies configuration.\n\n⚠️ All audio playback will be interrupted.",
         'clean_description': "Removes all local configuration files\nthat may cause conflicts.\n\nThis includes:\n• ~/.config/pipewire/pipewire.conf.d/\n• ~/.config/wireplumber/main.lua.d/\n\nℹ️ The pipewire.conf.d/10-clock-rates.conf file\n   is sufficient for automatic frequency switching.\n   Any other file in the same location, or in\n   wireplumber/main.lua.d/, may interfere and block\n   automatic frequency switching.",
@@ -280,7 +288,11 @@ T = {
         'default_rates': "Default (48000 only)",
         'detected': "detected",
         'since_start': "{total} (since startup)",
-        'refresh_sys': 'Refresh system information'
+        'app_nodes': 'Application nodes',
+        'application': 'Application',
+        'linked_device': 'Linked device',
+        'sortie': 'Output',
+        'entree': 'Input'
     }
 }
 

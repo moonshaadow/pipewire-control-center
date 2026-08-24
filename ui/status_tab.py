@@ -117,14 +117,16 @@ class StatusTab(QWidget):
             aes67_state = self._get_aes67_state()
             ptp_state = self._get_ptp_state()
             
+            detected_str = self.i18n.tr('detected')
+            
             self.sys_text.setHtml(
                 f"<b>PipeWire</b>     {pw_v}<br>"
                 f"<b>WirePlumber</b>  {wp_v}<br><br>"
-                f"<b>{self.i18n.tr('outputs')}</b>      {sinks} self.i18n.tr('detected')<br>"
-                f"<b>{self.i18n.tr('inputs')}</b>      {sources} self.i18n.tr('detected')<br><br>"
+                f"<b>{self.i18n.tr('outputs')}</b>      {sinks} {detected_str}<br>"
+                f"<b>{self.i18n.tr('inputs')}</b>      {sources} {detected_str}<br><br>"
                 f"<b>{self.i18n.tr('frequencies')}</b>   {rates_str}<br><br>"
-                f"<b>{self.i18n.tr('buffer')}</b>       {quantum} éch.<br>"
-                f"<b>{self.i18n.tr('latence')}</b>      {latency_ms:.1f} ms (à {rate} Hz)<br><br>"
+                f"<b>{self.i18n.tr('buffer')}</b>       {quantum} {self.i18n.tr('samples')}<br>"
+                f"<b>{self.i18n.tr('latence')}</b>      {latency_ms:.1f} {self.i18n.tr('milliseconds')} ({rate} {self.i18n.tr('hz')})<br><br>"
                 f"<b>{self.i18n.tr('xruns')}</b>        {xruns}<br><br>"
                 f"<b>AES67</b>        {aes67_state}<br>"
                 f"<b>PTP</b>          {ptp_state}"
