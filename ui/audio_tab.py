@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QPixmap
 from .icon_utils import get_device_icon_path
 from .i18n import I18n
+from .logger import Logger
 
 # --- Sliders ---
 class ClickSlider(QSlider):
@@ -43,6 +44,7 @@ class DeviceCard(QFrame):
         super().__init__()
         self.device = device
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self.setProperty("selected", is_selected)
         self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -123,6 +125,7 @@ class DeviceVolumeRow(QWidget):
         self.device = device
         self.pw = pw
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self._init_ui()
     
     def _init_ui(self):
@@ -193,6 +196,7 @@ class DeviceVolumeRow(QWidget):
         self.setLayout(layout)
     
     def _on_card_clicked(self, device):
+        self.logger.info(f"Clic sur carte périphérique: {device.get('name', 'inconnu')}")
         self.pw.set_default_device(device['id'])
     
     def _on_slider_moved(self, value):
@@ -201,9 +205,11 @@ class DeviceVolumeRow(QWidget):
             self.volume_changed.emit(self.device['id'], value / 100.0)
     
     def _on_release(self):
+        self.logger.debug(f"Slider relâché: {self.device['name']} -> {self.slider.value()}%")
         self.volume_changed.emit(self.device['id'], self.slider.value() / 100.0)
     
     def _on_boost(self, checked):
+        self.logger.debug(f"Boost {self.device['name']}: {'activé' if checked else 'désactivé'}")
         if checked:
             self.slider.setRange(0, 150)
         else:
@@ -238,6 +244,7 @@ class DeviceInputRow(QWidget):
         self.device = device
         self.pw = pw
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self._init_ui()
     
     def _init_ui(self):
@@ -303,6 +310,7 @@ class DeviceInputRow(QWidget):
         self.setLayout(layout)
     
     def _on_card_clicked(self, device):
+        self.logger.info(f"Clic sur carte périphérique entrée: {device.get('name', 'inconnu')}")
         self.pw.set_default_device(device['id'])
     
     def _on_slider_moved(self, value):
@@ -311,6 +319,7 @@ class DeviceInputRow(QWidget):
             self.volume_changed.emit(self.device['id'], value / 100.0)
     
     def _on_release(self):
+        self.logger.debug(f"Slider relâché: {self.device['name']} -> {self.slider.value()}%")
         self.volume_changed.emit(self.device['id'], self.slider.value() / 100.0)
     
     def update_volume(self, volume):
@@ -339,6 +348,7 @@ class StreamRow(QFrame):
         super().__init__()
         self.stream = stream
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self.setFrameStyle(QFrame.Shape.NoFrame)
         self.setStyleSheet("background-color: #2a2a2a; border-radius: 4px; margin: 1px 0;")
         self.setFixedHeight(36)
@@ -388,6 +398,7 @@ class StreamRow(QFrame):
             self.volume_changed.emit(self.stream.get('id', 0), value / 100.0)
     
     def _on_release(self):
+        self.logger.debug(f"Slider flux relâché: {self.stream.get('name', 'inconnu')} -> {self.slider.value()}%")
         self.volume_changed.emit(self.stream.get('id', 0), self.slider.value() / 100.0)
     
     def update_volume(self, volume):
@@ -404,6 +415,7 @@ class AudioTab(QWidget):
         super().__init__()
         self.pw = pw
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self.device_rows = {}
         self.input_rows = {}
         self.stream_rows = {}
@@ -586,6 +598,7 @@ class AudioTab(QWidget):
             else:
                 row = DeviceVolumeRow(device, self.pw) if direction == 'sortie' else DeviceInputRow(device, self.pw)
                 row.volume_changed.connect(lambda did, vol: self.pw.set_volume(did, vol))
+                self.logger.debug(f"Nouveau périphérique ajouté: {name}")
             rows[name] = row
             layout.addWidget(row)
         
@@ -614,9 +627,9 @@ class AudioTab(QWidget):
             for device in sources:
                 self.input_rows[device['name']].set_selected(device.get('id') == active.get('id'))
         
-        # Mettre à jour les noms connus
         current_names = set(self.device_rows.keys()) | set(self.input_rows.keys())
         if current_names != self._prev_device_names:
+            self.logger.info(f"Périphériques changés: {len(self._prev_device_names)} -> {len(current_names)}")
             self._prev_device_names = current_names
     
     def _find_active_sink(self, sinks):
@@ -652,11 +665,9 @@ class AudioTab(QWidget):
         if any(row.slider.is_dragging() for row in self.stream_rows.values()):
             return
         
-        # Invalider le cache pour détecter les changements JACK
         self.pw.invalidate_cache()
         data = self.pw._get_pw_dump()
         
-        # Vérifier si les périphériques ont changé
         devices = self.pw.get_devices()
         current_names = {d['name'] for d in devices}
         
@@ -764,9 +775,11 @@ class AudioTab(QWidget):
                 row.volume_changed.connect(self._on_stream_volume)
                 self.stream_rows[sid] = row
                 self.streams_layout.addWidget(row)
+                self.logger.debug(f"Nouveau flux audio: {app}")
         
         for sid in list(self.stream_rows):
             if sid not in current_ids:
+                self.logger.debug(f"Flux audio supprimé: {self.stream_rows[sid].stream.get('name', 'inconnu')}")
                 self.stream_rows[sid].deleteLater()
                 del self.stream_rows[sid]
         
@@ -794,4 +807,5 @@ class AudioTab(QWidget):
         self.empty_lbl.setText(self.i18n.tr('aucun_flux'))
     
     def shutdown(self):
+        self.logger.debug("Arrêt du timer AudioTab")
         self.timer.stop()

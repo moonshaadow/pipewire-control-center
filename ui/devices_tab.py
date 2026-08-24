@@ -6,17 +6,20 @@ from PyQt6.QtWidgets import (
     QPushButton, QHBoxLayout, QMessageBox, QLabel, QCheckBox,
     QGroupBox, QMenu
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QSettings
 from PyQt6.QtGui import QIcon, QAction
 from .icon_utils import get_device_icon_path
 from .i18n import I18n
+from .logger import Logger
 
 class DevicesTab(QWidget):
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self._init_ui()
+        self._restore_header_state()
         self.refresh()
         
         # Timer de rafraîchissement automatique
@@ -88,6 +91,26 @@ class DevicesTab(QWidget):
         layout.addWidget(self.apps_gb)
         
         self.setLayout(layout)
+    
+    def _restore_header_state(self):
+        """Restaure la largeur des colonnes sauvegardée"""
+        settings = QSettings('PipeWireControlCenter', 'DevicesTab')
+        
+        # Restaurer l'état des en-têtes du tableau des périphériques
+        devices_state = settings.value('devices_header_state')
+        if devices_state is not None:
+            self.tree.header().restoreState(devices_state)
+        
+        # Restaurer l'état des en-têtes du tableau des applications
+        apps_state = settings.value('apps_header_state')
+        if apps_state is not None:
+            self.apps_tree.header().restoreState(apps_state)
+    
+    def _save_header_state(self):
+        """Sauvegarde la largeur des colonnes"""
+        settings = QSettings('PipeWireControlCenter', 'DevicesTab')
+        settings.setValue('devices_header_state', self.tree.header().saveState())
+        settings.setValue('apps_header_state', self.apps_tree.header().saveState())
     
     def showEvent(self, event):
         """Démarre le timer quand l'onglet devient visible"""
@@ -385,3 +408,8 @@ class DevicesTab(QWidget):
         self.set_default_btn.setText(self.i18n.tr('definir_defaut'))
         self.destroy_cb.setText(self.i18n.tr('mode_suppression'))
         self.destroy_btn.setText(self.i18n.tr('supprimer_noeud'))
+    
+    def closeEvent(self, event):
+        """Sauvegarde l'état des en-têtes avant la fermeture"""
+        self._save_header_state()
+        super().closeEvent(event)

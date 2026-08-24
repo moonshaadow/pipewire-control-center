@@ -7,31 +7,40 @@ import time
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from ui.logger import Logger
 
 class PipeWireManager:
     """Interface avec PipeWire via pw-metadata, pw-cli"""
     
     def __init__(self):
+        self.logger = Logger.instance()
         self._check_tools()
         self._cache_file = os.path.join('/tmp', f'pw-dump-cache-{os.getuid()}.json')
         self._cache_duration = 0.2
         self._pw_dump_cache = None
         self._pw_dump_time = 0
+        self.logger.info("PipeWireManager initialisé")
     
     def _check_tools(self):
         for tool in ['pw-metadata', 'pw-dump']:
             try:
                 subprocess.run(['which', tool], capture_output=True, check=True)
             except subprocess.CalledProcessError:
+                self.logger.error(f"Outil manquant : {tool}")
                 raise RuntimeError(f"Outil manquant : {tool}")
     
     def _run(self, cmd: List[str], timeout: int = 5) -> Tuple[bool, str, str]:
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            if r.returncode != 0:
+                self.logger.debug(f"Commande échouée ({r.returncode}): {' '.join(cmd)}")
+                self.logger.debug(f"stderr: {r.stderr.strip()}")
             return r.returncode == 0, r.stdout.strip(), r.stderr.strip()
         except subprocess.TimeoutExpired:
+            self.logger.warning(f"Timeout ({timeout}s): {' '.join(cmd)}")
             return False, "", "Timeout"
         except Exception as e:
+            self.logger.error(f"Erreur d'exécution {' '.join(cmd)}: {e}")
             return False, "", str(e)
     
     def invalidate_cache(self):
@@ -41,8 +50,8 @@ class PipeWireManager:
         try:
             if os.path.exists(self._cache_file):
                 os.remove(self._cache_file)
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.warning(f"Erreur invalidation cache: {e}")
     
     def _get_pw_dump(self) -> List[Dict]:
         now = time.time()
@@ -57,8 +66,8 @@ class PipeWireManager:
                         self._pw_dump_cache = json.load(f)
                         self._pw_dump_time = now
                         return self._pw_dump_cache
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Erreur lecture cache: {e}")
         
         ok, out, _ = self._run(['pw-dump'], timeout=3)
         if ok:
@@ -69,13 +78,14 @@ class PipeWireManager:
                 try:
                     with open(self._cache_file, 'w') as f:
                         json.dump(data, f)
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.logger.debug(f"Erreur écriture cache: {e}")
                 return data
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.error(f"Erreur parsing pw-dump: {e}")
         
         if self._pw_dump_cache is not None:
+            self.logger.debug("Utilisation du cache précédent (pw-dump échoué)")
             return self._pw_dump_cache
         return []
     
@@ -88,6 +98,10 @@ class PipeWireManager:
     
     def _set_metadata(self, key: str, value: str) -> bool:
         ok, _, _ = self._run(['pw-metadata', '0', key, value])
+        if ok:
+            self.logger.info(f"Métadonnée modifiée: {key} = {value}")
+        else:
+            self.logger.warning(f"Échec modification métadonnée: {key} = {value}")
         return ok
     
     def get_rate(self) -> int:
@@ -95,7 +109,7 @@ class PipeWireManager:
         return int(v) if v and v.isdigit() else 48000
     
     def set_rate(self, rate: int) -> bool:
-        """Change le taux d'échantillonnage courant"""
+        self.logger.info(f"Changement de fréquence: {rate} Hz")
         return self._set_metadata('clock.rate', str(rate))
     
     def get_quantum(self) -> int:
@@ -103,6 +117,7 @@ class PipeWireManager:
         return int(v) if v and v.isdigit() else 1024
     
     def set_quantum(self, size: int) -> bool:
+        self.logger.info(f"Changement de buffer: {size} échantillons")
         return self._set_metadata('clock.quantum', str(size))
     
     def get_min_quantum(self) -> int:
@@ -173,6 +188,7 @@ class PipeWireManager:
         return None
     
     def set_default_device(self, device_id: int) -> bool:
+        self.logger.info(f"Changement périphérique par défaut: ID {device_id}")
         ok, _, _ = self._run(['wpctl', 'set-default', str(device_id)])
         return ok
     
@@ -189,6 +205,7 @@ class PipeWireManager:
         return None
     
     def set_volume(self, device_id: int, volume: float) -> bool:
+        self.logger.debug(f"Changement volume: ID {device_id} -> {volume:.2f}")
         ok, _, _ = self._run(['wpctl', 'set-volume', str(device_id), f'{volume:.2f}'])
         return ok
     
@@ -221,28 +238,37 @@ class PipeWireManager:
                 f'    default.clock.allowed-rates = [ {rates_str} ]\n'
                 f'}}\n'
             )
+            self.logger.info(f"Fréquences autorisées écrites: {rates_str}")
             return True
-        except Exception:
+        except Exception as e:
+            self.logger.error(f"Erreur écriture fréquences: {e}")
             return False
     
     def remove_config(self) -> bool:
         try:
             if self.config_file.exists():
                 self.config_file.unlink()
+                self.logger.info("Configuration fréquences supprimée")
             return True
-        except Exception:
+        except Exception as e:
+            self.logger.error(f"Erreur suppression configuration: {e}")
             return False
     
     def destroy_node(self, node_id: int) -> Tuple[bool, str]:
-        """Supprime temporairement un nœud PipeWire"""
+        self.logger.warning(f"Suppression nœud: ID {node_id}")
         ok, _, err = self._run(['pw-cli', 'destroy', str(node_id)])
         return ok, err
     
     def restart_services(self) -> Tuple[bool, str]:
+        self.logger.info("Redémarrage des services PipeWire + WirePlumber")
         ok, out, err = self._run(
             ['systemctl', '--user', 'restart', 'pipewire', 'wireplumber'],
             timeout=10
         )
+        if ok:
+            self.logger.info("Services redémarrés avec succès")
+        else:
+            self.logger.error(f"Erreur redémarrage services: {err or out}")
         return (True, "Services redémarrés") if ok else (False, err or out or "Erreur")
     
     def get_version(self) -> str:

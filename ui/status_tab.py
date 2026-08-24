@@ -8,12 +8,14 @@ import subprocess
 import re
 import os
 from .i18n import I18n
+from .logger import Logger
 
 class StatusTab(QWidget):
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self._events = []
         self._logged_aes67_lines = set()
         self._prev_rate = None
@@ -226,8 +228,8 @@ class StatusTab(QWidget):
             
             self._check_aes67_logs()
             
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error(f"Erreur: {e}")
     
     def _check_aes67_logs(self):
         try:
@@ -252,8 +254,8 @@ class StatusTab(QWidget):
                             if line:
                                 self._log(line, "#00bcd4", self.i18n.tr('category_aes67'))
                         self._prev_aes67_log_size = len(lines)
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error(f"Erreur: {e}")
     
     def _check_ptp_desync(self):
         try:

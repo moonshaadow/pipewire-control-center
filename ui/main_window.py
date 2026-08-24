@@ -20,6 +20,7 @@ from .status_tab import StatusTab
 from .frequency_tab import FrequencyTab
 from .aes67_tab import Aes67Tab
 from .i18n import I18n, get_system_lang
+from .logger import Logger
 
 # --- Couleurs ---
 def _hex_to_rgb(h): return tuple(int(h.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) if len(h.lstrip('#')) == 6 else None
@@ -73,8 +74,8 @@ class UIConfig:
                     if 'close_behavior' in loaded:
                         config['close_behavior'] = loaded['close_behavior']
                     return config
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.error(f"Erreur: {e}")
         return self.default_config.copy()
     
     def save(self):
@@ -106,6 +107,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.ui_config = ui_config
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self.lang = self.i18n.get_lang()
         self.setWindowTitle(self.i18n.tr('settings'))
         self.setMinimumWidth(400)
@@ -201,6 +203,7 @@ class MainWindow(QMainWindow):
         self.config_mgr = ConfigManager()
         self.ui_config = UIConfig()
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self.i18n.set_ui_config(self.ui_config)
         self.lang = self.i18n.get_lang()
         

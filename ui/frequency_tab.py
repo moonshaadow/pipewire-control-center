@@ -9,12 +9,14 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from pathlib import Path
 from .i18n import I18n
+from .logger import Logger
 
 class FrequencyTab(QWidget):
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self._init_ui()
     
     def _init_ui(self):
@@ -182,25 +184,25 @@ class FrequencyTab(QWidget):
         try:
             if pipewire_dir.exists():
                 pipewire_dir.rmdir()
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error(f"Erreur: {e}")
         try:
             if wireplumber_dir.exists():
                 wireplumber_dir.rmdir()
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error(f"Erreur: {e}")
         try:
             pipewire_config_dir = pipewire_dir.parent
             if pipewire_config_dir.exists():
                 pipewire_config_dir.rmdir()
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error(f"Erreur: {e}")
         try:
             wireplumber_config_dir = wireplumber_dir.parent
             if wireplumber_config_dir.exists():
                 wireplumber_config_dir.rmdir()
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error(f"Erreur: {e}")
         
         if errors:
             QMessageBox.warning(self, self.i18n.tr('error_title'), 

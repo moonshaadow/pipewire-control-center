@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal
 from .i18n import I18n
+from .logger import Logger
 
 class ProfilesTab(QWidget):
     profile_loaded = pyqtSignal()
@@ -16,6 +17,7 @@ class ProfilesTab(QWidget):
         self.pw = pw
         self.config_mgr = config_mgr
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self._init_ui()
         self._refresh_list()
     

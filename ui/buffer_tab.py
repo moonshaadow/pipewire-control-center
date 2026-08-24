@@ -7,12 +7,14 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from .i18n import I18n
+from .logger import Logger
 
 class BufferTab(QWidget):
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self._init_ui()
         self.load_current()
         
@@ -192,8 +194,8 @@ class BufferTab(QWidget):
                         
                         self.devices_tree.addTopLevelItem(item_widget)
                         break
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error(f"Erreur: {e}")
     
     def refresh_language(self):
         self.buf_gb.setTitle(self.i18n.tr('buffer_global'))

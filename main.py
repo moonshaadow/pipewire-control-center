@@ -5,8 +5,13 @@ import os
 from PyQt6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QAction
 from ui.main_window import MainWindow
+from ui.logger import Logger
 
 def main():
+    # Initialiser le logger
+    logger = Logger.instance()
+    logger.info("=== Démarrage de PipeWire Control Center ===")
+    
     app = QApplication(sys.argv)
     app.setApplicationName("PipeWire Control Center")
     app.setStyle('Fusion')
@@ -19,7 +24,6 @@ def main():
     try:
         window = MainWindow()
         
-        # Icône systray
         tray = QSystemTrayIcon()
         if os.path.exists(systray_icon):
             tray.setIcon(QIcon(systray_icon))
@@ -41,10 +45,13 @@ def main():
         tray.show()
         
         window.show()
+        logger.info("Application démarrée")
         return app.exec()
     except RuntimeError as e:
+        logger.critical(f"Erreur Runtime: {e}")
         QMessageBox.critical(None, "Erreur", str(e))
     except Exception as e:
+        logger.exception(f"Erreur inattendue: {e}")
         QMessageBox.critical(None, "Erreur", f"Erreur inattendue : {e}")
     return 1
 

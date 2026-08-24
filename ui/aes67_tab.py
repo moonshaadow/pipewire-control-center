@@ -10,12 +10,14 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from .i18n import I18n
+from .logger import Logger
 
 class Aes67Tab(QWidget):
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
         self.i18n = I18n.instance()
+        self.logger = Logger.instance()
         self.hostname = socket.gethostname()
         self._init_ui()
         self._load_config()
@@ -150,8 +152,8 @@ class Aes67Tab(QWidget):
                         iface = m.group(1)
                         if iface != 'lo':
                             self.interface_combo.addItem(iface)
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error(f"Erreur: {e}")
         if self.interface_combo.count() == 0:
             self.interface_combo.addItem("eth0")
     
@@ -227,8 +229,8 @@ ptp_master={str(self.ptp_master_cb.isChecked()).lower()}
         try:
             self._prefs_file.parent.mkdir(parents=True, exist_ok=True)
             self._prefs_file.write_text(prefs)
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error(f"Erreur: {e}")
     
     def _set_config_enabled(self, enabled):
         self.mode_combo.setEnabled(enabled)
