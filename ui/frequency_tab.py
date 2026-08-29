@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 # ui/frequency_tab.py
-"""Onglet de configuration des fréquences et redémarrage"""
+"""Onglet de configuration des fréquences"""
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
     QPushButton, QLabel, QMessageBox, QListWidget,
     QListWidgetItem, QInputDialog
 )
 from PyQt6.QtCore import Qt
-from pathlib import Path
 from .i18n import I18n
 from .logger import Logger
 
@@ -59,28 +58,6 @@ class FrequencyTab(QWidget):
         self.config_gb.setLayout(config_layout)
         layout.addWidget(self.config_gb)
         
-        # Redémarrage des services
-        self.restart_gb = QGroupBox(self.i18n.tr('appliquer_changements'))
-        restart_layout = QVBoxLayout()
-        restart_layout.addWidget(QLabel(self.i18n.tr('restart_description')))
-        self.restart_btn = QPushButton(self.i18n.tr('redemarrer_services'))
-        self.restart_btn.setStyleSheet("QPushButton { color: #ff9800; font-weight: bold; padding: 8px; }")
-        self.restart_btn.clicked.connect(self._restart_services)
-        restart_layout.addWidget(self.restart_btn)
-        self.restart_gb.setLayout(restart_layout)
-        layout.addWidget(self.restart_gb)
-        
-        # Nettoyage avancé
-        self.clean_gb = QGroupBox(self.i18n.tr('nettoyage_avance'))
-        clean_layout = QVBoxLayout()
-        clean_layout.addWidget(QLabel(self.i18n.tr('clean_description')))
-        self.clean_btn = QPushButton(self.i18n.tr('nettoyer_configs'))
-        self.clean_btn.setStyleSheet("QPushButton { color: #ef5350; font-weight: bold; padding: 8px; }")
-        self.clean_btn.clicked.connect(self._clean_all_configs)
-        clean_layout.addWidget(self.clean_btn)
-        self.clean_gb.setLayout(clean_layout)
-        layout.addWidget(self.clean_gb)
-        
         layout.addStretch()
         self.setLayout(layout)
     
@@ -127,98 +104,40 @@ class FrequencyTab(QWidget):
             return
         
         if self.pw.write_allowed_rates(rates):
-            QMessageBox.information(self, self.i18n.tr('success'), 
-                self.i18n.tr('config_saved_restart')
+            self.logger.info(f"Fréquences sauvegardées: {rates}")
+            
+            # Demander si l'utilisateur veut redémarrer
+            reply = QMessageBox.question(
+                self,
+                self.i18n.tr('success'),
+                self.i18n.tr('config_saved_restart'),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
             )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                ok, msg = self.pw.restart_services()
+                if ok:
+                    QMessageBox.information(self, self.i18n.tr('success'), msg)
+                else:
+                    QMessageBox.warning(self, self.i18n.tr('error_title'), msg)
         else:
+            self.logger.error("Échec écriture fréquences")
             QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('config_error'))
     
     def _remove_config(self):
-        reply = QMessageBox.question(self, self.i18n.tr('confirmation'),
-            self.i18n.tr('remove_config_confirm'))
+        reply = QMessageBox.question(
+            self,
+            self.i18n.tr('confirmation'),
+            self.i18n.tr('remove_config_confirm'),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
         if reply == QMessageBox.StandardButton.Yes:
             if self.pw.remove_config():
                 self._populate_rates_list()
                 QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('config_removed'))
-    
-    def _restart_services(self):
-        reply = QMessageBox.question(self, self.i18n.tr('confirmation'),
-            self.i18n.tr('restart_confirm') + "\n\n" + self.i18n.tr('restart_warning'))
-        if reply == QMessageBox.StandardButton.Yes:
-            ok, msg = self.pw.restart_services()
-            if ok:
-                QMessageBox.information(self, self.i18n.tr('success'), msg)
             else:
-                QMessageBox.warning(self, self.i18n.tr('error_title'), msg)
-    
-    def _clean_all_configs(self):
-        pipewire_dir = Path.home() / '.config' / 'pipewire' / 'pipewire.conf.d'
-        wireplumber_dir = Path.home() / '.config' / 'wireplumber' / 'main.lua.d'
-        
-        files_to_delete = []
-        if pipewire_dir.exists():
-            files_to_delete.extend(pipewire_dir.glob('*.conf'))
-        if wireplumber_dir.exists():
-            files_to_delete.extend(wireplumber_dir.glob('*.lua'))
-        
-        if not files_to_delete:
-            QMessageBox.information(self, self.i18n.tr('info'), self.i18n.tr('no_local_config'))
-            return
-        
-        file_list = '\n'.join(f"  • {f}" for f in files_to_delete)
-        
-        reply = QMessageBox.question(self, self.i18n.tr('confirmation'),
-            self.i18n.tr('clean_confirm').format(file_list=file_list)
-        )
-        
-        if reply != QMessageBox.StandardButton.Yes:
-            return
-        
-        errors = []
-        for f in files_to_delete:
-            try:
-                f.unlink()
-            except Exception as e:
-                errors.append(str(e))
-        
-        try:
-            if pipewire_dir.exists():
-                pipewire_dir.rmdir()
-        except Exception as e:
-            self.logger.error(f"Erreur: {e}")
-        try:
-            if wireplumber_dir.exists():
-                wireplumber_dir.rmdir()
-        except Exception as e:
-            self.logger.error(f"Erreur: {e}")
-        try:
-            pipewire_config_dir = pipewire_dir.parent
-            if pipewire_config_dir.exists():
-                pipewire_config_dir.rmdir()
-        except Exception as e:
-            self.logger.error(f"Erreur: {e}")
-        try:
-            wireplumber_config_dir = wireplumber_dir.parent
-            if wireplumber_config_dir.exists():
-                wireplumber_config_dir.rmdir()
-        except Exception as e:
-            self.logger.error(f"Erreur: {e}")
-        
-        if errors:
-            QMessageBox.warning(self, self.i18n.tr('error_title'), 
-                self.i18n.tr('clean_errors').format(errors='\n'.join(errors))
-            )
-        else:
-            ok, msg = self.pw.restart_services()
-            if ok:
-                self._populate_rates_list()
-                QMessageBox.information(self, self.i18n.tr('success'), 
-                    self.i18n.tr('clean_configs_success') + "\n" + msg
-                )
-            else:
-                QMessageBox.warning(self, self.i18n.tr('error_title'), 
-                    self.i18n.tr('clean_restart_error').format(msg=msg)
-                )
+                QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('config_error'))
     
     def refresh_language(self):
         self.config_gb.setTitle(self.i18n.tr('frequences_autorisees'))
@@ -226,7 +145,3 @@ class FrequencyTab(QWidget):
         self.remove_rate_btn.setText(self.i18n.tr('supprimer'))
         self.save_config_btn.setText(self.i18n.tr('enregistrer'))
         self.remove_config_btn.setText(self.i18n.tr('supprimer_config'))
-        self.restart_gb.setTitle(self.i18n.tr('appliquer_changements'))
-        self.restart_btn.setText(self.i18n.tr('redemarrer_services'))
-        self.clean_gb.setTitle(self.i18n.tr('nettoyage_avance'))
-        self.clean_btn.setText(self.i18n.tr('nettoyer_configs'))

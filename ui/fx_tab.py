@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Onglet FX : égaliseur et compresseur avec profils"""
+"""Onglet FX : égaliseur et compresseur avec profils - contrôle EasyEffects"""
 import os
 import json
+import socket
 import subprocess
 import signal
 from pathlib import Path
@@ -15,6 +16,87 @@ from PyQt6.QtGui import QFont
 from .i18n import I18n
 from .logger import Logger
 
+class EasyEffectsClient:
+    """Client pour communiquer avec le serveur local d'EasyEffects"""
+    
+    def __init__(self):
+        self.logger = Logger.instance()
+        self.socket_path = os.path.join(
+            os.environ.get('XDG_RUNTIME_DIR', '/tmp'),
+            'EasyEffectsServer'
+        )
+    
+    def _send(self, command, wait_response=True):
+        """Envoie une commande au serveur local"""
+        try:
+            client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            client.connect(self.socket_path)
+            client.send(command.encode())
+            response = b""
+            if wait_response:
+                client.settimeout(2)
+                try:
+                    response = client.recv(4096)
+                except socket.timeout:
+                    pass
+            client.close()
+            return response.decode() if response else None
+        except FileNotFoundError:
+            self.logger.debug("EasyEffects n'est pas lancé")
+            return None
+        except ConnectionRefusedError:
+            self.logger.debug("EasyEffects a refusé la connexion")
+            return None
+        except Exception as e:
+            self.logger.error(f"Erreur communication EasyEffects: {e}")
+            return None
+    
+    def is_running(self):
+        """Vérifie si EasyEffects est lancé"""
+        try:
+            client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            client.connect(self.socket_path)
+            client.close()
+            return True
+        except Exception:
+            return False
+    
+    def show_window(self):
+        """Affiche la fenêtre EasyEffects"""
+        return self._send("show_window\n", wait_response=False)
+    
+    def hide_window(self):
+        """Cache la fenêtre EasyEffects"""
+        return self._send("hide_window\n", wait_response=False)
+    
+    def quit_app(self):
+        """Quitte EasyEffects"""
+        return self._send("quit_app\n", wait_response=False)
+    
+    def load_preset(self, pipeline_type, preset_name):
+        """Charge un preset (pipeline_type: 'input' ou 'output')"""
+        command = f"load_preset:{pipeline_type}:{preset_name}\n"
+        return self._send(command)
+    
+    def set_global_bypass(self, bypass):
+        """Active/désactive le bypass global"""
+        state = 1 if bypass else 0
+        command = f"global_bypass:{state}\n"
+        return self._send(command)
+    
+    def get_global_bypass(self):
+        """Obtient l'état du bypass global"""
+        response = self._send("get_global_bypass\n")
+        if response:
+            return response.strip() == "1"
+        return None
+    
+    def get_last_loaded_preset(self, pipeline_type):
+        """Obtient le dernier preset chargé"""
+        command = f"get_last_loaded_preset:{pipeline_type}\n"
+        return self._send(command)
+
+
 class FXTab(QWidget):
     def __init__(self, pw):
         super().__init__()
@@ -22,7 +104,8 @@ class FXTab(QWidget):
         self.i18n = I18n.instance()
         self.logger = Logger.instance()
         
-        # Processus EasyEffects
+        # Client EasyEffects
+        self.ee_client = EasyEffectsClient()
         self.ee_process = None
         
         # Fichiers
@@ -43,7 +126,8 @@ class FXTab(QWidget):
                 "comp_release": 0.5,
                 "comp_gain": 12.0,
                 "comp_mode": 1,
-                "comp_measure": 1
+                "comp_measure": 1,
+                "ee_preset_name": ""
             },
             "Profil 2": {
                 "name": "Profil 2",
@@ -54,7 +138,8 @@ class FXTab(QWidget):
                 "comp_release": 0.5,
                 "comp_gain": 12.0,
                 "comp_mode": 1,
-                "comp_measure": 1
+                "comp_measure": 1,
+                "ee_preset_name": ""
             },
             "Profil 3": {
                 "name": "Profil 3",
@@ -65,7 +150,8 @@ class FXTab(QWidget):
                 "comp_release": 0.5,
                 "comp_gain": 12.0,
                 "comp_mode": 1,
-                "comp_measure": 1
+                "comp_measure": 1,
+                "ee_preset_name": ""
             }
         }
         
@@ -77,6 +163,7 @@ class FXTab(QWidget):
         
         self._init_ui()
         self._load_profile_to_ui()
+        self._update_ee_status()
     
     def _load_fx_mode(self):
         try:
@@ -125,6 +212,12 @@ class FXTab(QWidget):
         self.main_gb = QGroupBox("FX")
         main_layout = QVBoxLayout()
         
+        # Statut EasyEffects
+        self.ee_status_lbl = QLabel("")
+        self.ee_status_lbl.setFont(QFont("Monospace", 8))
+        self.ee_status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(self.ee_status_lbl)
+        
         # Mode FX
         mode_layout = QHBoxLayout()
         mode_layout.addWidget(QLabel(self.i18n.tr('fx_mode') + ":"))
@@ -159,6 +252,17 @@ class FXTab(QWidget):
         profile_layout.addWidget(rename_btn)
         
         main_layout.addLayout(profile_layout)
+        
+        # Nom du preset EasyEffects
+        ee_preset_layout = QHBoxLayout()
+        ee_preset_layout.addWidget(QLabel(self.i18n.tr('fx_ee_preset') + ":"))
+        
+        self.ee_preset_combo = QComboBox()
+        self.ee_preset_combo.setEditable(True)
+        self.ee_preset_combo.setPlaceholderText("Nom du preset EasyEffects")
+        ee_preset_layout.addWidget(self.ee_preset_combo, 1)
+        
+        main_layout.addLayout(ee_preset_layout)
         
         # Zone EQ
         self.eq_gb = QGroupBox(self.i18n.tr('fx_eq_title'))
@@ -241,20 +345,30 @@ class FXTab(QWidget):
         gain_row.addWidget(self.gain_label)
         comp_form.addRow(self.i18n.tr('fx_makeup'), gain_row)
         
-        self.mode_combo_comp = QComboBox()
-        self.mode_combo_comp.addItem("0 - Aucun", 0)
-        self.mode_combo_comp.addItem("1 - Compression", 1)
-        self.mode_combo_comp.addItem("2 - Limiteur", 2)
-        self.mode_combo_comp.setCurrentIndex(1)
-        comp_form.addRow("Mode:", self.mode_combo_comp)
-        
         comp_layout.addLayout(comp_form)
         self.comp_gb.setLayout(comp_layout)
         main_layout.addWidget(self.comp_gb)
         
-        # Bouton Appliquer / Ouvrir
-        self.apply_btn = QPushButton(self.i18n.tr('fx_apply'))
-        self.apply_btn.clicked.connect(self._apply_fx)
+        # Boutons
+        btn_layout = QHBoxLayout()
+        
+        # Bouton Lancer EasyEffects
+        self.launch_btn = QPushButton(self.i18n.tr('fx_launch_easyeffects'))
+        self.launch_btn.clicked.connect(self._launch_easyeffects)
+        self.launch_btn.setStyleSheet("QPushButton { padding: 8px; font-weight: bold; }")
+        btn_layout.addWidget(self.launch_btn)
+        
+        # Bouton Ouvrir fenêtre
+        self.show_btn = QPushButton(self.i18n.tr('fx_show_easyeffects'))
+        self.show_btn.clicked.connect(self._show_easyeffects)
+        self.show_btn.setEnabled(False)
+        btn_layout.addWidget(self.show_btn)
+        
+        main_layout.addLayout(btn_layout)
+        
+        # Bouton Appliquer le preset
+        self.apply_btn = QPushButton(self.i18n.tr('fx_apply_preset'))
+        self.apply_btn.clicked.connect(self._apply_preset)
         self.apply_btn.setStyleSheet("QPushButton { padding: 8px; font-weight: bold; }")
         main_layout.addWidget(self.apply_btn)
         
@@ -283,12 +397,6 @@ class FXTab(QWidget):
         self.eq_gb.setVisible(is_internal)
         self.comp_gb.setVisible(is_internal)
         self.profile_combo.setVisible(is_internal)
-        
-        # Changer le texte du bouton selon le mode
-        if self.fx_mode == 'easyeffects':
-            self.apply_btn.setText(self.i18n.tr('fx_open_easyeffects'))
-        else:
-            self.apply_btn.setText(self.i18n.tr('fx_apply'))
     
     def _update_enabled_state(self):
         fx = self.enable_cb.isChecked()
@@ -297,6 +405,7 @@ class FXTab(QWidget):
         is_internal = self.fx_mode == 'internal'
         
         self.apply_btn.setEnabled(fx)
+        self.launch_btn.setEnabled(True)  # Toujours actif
         self.profile_combo.setEnabled(fx and is_internal)
         self.eq_enable_cb.setEnabled(fx and is_internal)
         self.comp_enable_cb.setEnabled(fx and is_internal)
@@ -309,11 +418,85 @@ class FXTab(QWidget):
             self.attack_slider.setEnabled(fx and comp)
             self.release_slider.setEnabled(fx and comp)
             self.gain_slider.setEnabled(fx and comp)
-            self.mode_combo_comp.setEnabled(fx and comp)
+    
+    def _update_ee_status(self):
+        """Met à jour le statut EasyEffects"""
+        if self.ee_client.is_running():
+            self.ee_status_lbl.setText("● EasyEffects : " + self.i18n.tr('fx_ee_running'))
+            self.ee_status_lbl.setStyleSheet("color: #4CAF50;")
+            self.show_btn.setEnabled(True)
+        else:
+            self.ee_status_lbl.setText("○ EasyEffects : " + self.i18n.tr('fx_ee_not_running'))
+            self.ee_status_lbl.setStyleSheet("color: #888;")
+            self.show_btn.setEnabled(False)
+    
+    def _launch_easyeffects(self):
+        """Lance EasyEffects en arrière-plan"""
+        if self.ee_client.is_running():
+            QMessageBox.information(self, "EasyEffects", self.i18n.tr('fx_ee_already_running'))
+            self._update_ee_status()
+            return
+        
+        try:
+            result = subprocess.run(['which', 'easyeffects'], capture_output=True, text=True)
+            if result.returncode != 0:
+                QMessageBox.warning(
+                    self, self.i18n.tr('error_title'),
+                    self.i18n.tr('fx_easyeffects_not_found')
+                )
+                return
             
-            self.attack_label.setEnabled(fx and comp)
-            self.release_label.setEnabled(fx and comp)
-            self.gain_label.setEnabled(fx and comp)
+            self.ee_process = subprocess.Popen(
+                ['easyeffects', '--hide-window'],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            self.logger.info(f"EasyEffects lancé (PID {self.ee_process.pid})")
+            
+            # Attendre que le serveur local soit prêt
+            import time
+            time.sleep(3)
+            self._update_ee_status()
+        except Exception as e:
+            self.logger.error(f"Erreur lancement EasyEffects: {e}")
+            QMessageBox.warning(self, self.i18n.tr('error_title'), str(e))
+    
+    def _show_easyeffects(self):
+        """Affiche la fenêtre EasyEffects"""
+        self.ee_client.show_window()
+    
+    def _apply_preset(self):
+        """Applique le preset EasyEffects"""
+        if not self.ee_client.is_running():
+            QMessageBox.warning(
+                self, self.i18n.tr('error_title'),
+                self.i18n.tr('fx_ee_not_running_msg')
+            )
+            return
+        
+        preset_name = self.ee_preset_combo.currentText().strip()
+        if not preset_name:
+            QMessageBox.warning(
+                self, self.i18n.tr('error_title'),
+                self.i18n.tr('fx_ee_preset_name_required')
+            )
+            return
+        
+        # Charger le preset dans EasyEffects (pipeline sortie)
+        self.ee_client.load_preset('output', preset_name)
+        
+        # Sauvegarder le nom du preset dans le profil
+        self._save_current_profile()
+        profile = self.profiles.get(self.current_profile_name)
+        if profile:
+            profile['ee_preset_name'] = preset_name
+            self._save_profiles()
+        
+        QMessageBox.information(
+            self, self.i18n.tr('success'),
+            self.i18n.tr('fx_ee_preset_applied').format(name=preset_name)
+        )
     
     def _on_profile_changed(self, name):
         self._save_current_profile()
@@ -341,8 +524,7 @@ class FXTab(QWidget):
         p['comp_attack'] = self.attack_slider.value() / 100.0
         p['comp_release'] = self.release_slider.value() / 100.0
         p['comp_gain'] = self.gain_slider.value() / 10.0
-        p['comp_mode'] = self.mode_combo_comp.currentData()
-        p['comp_measure'] = 1
+        p['ee_preset_name'] = self.ee_preset_combo.currentText().strip()
         self._save_profiles()
     
     def _load_profile_to_ui(self):
@@ -356,6 +538,9 @@ class FXTab(QWidget):
         self.comp_enable_cb.setChecked(p.get('comp_enabled', False))
         self.eq_enable_cb.blockSignals(False)
         self.comp_enable_cb.blockSignals(False)
+        
+        # Charger le nom du preset EasyEffects
+        self.ee_preset_combo.setCurrentText(p.get('ee_preset_name', ''))
         
         gains = p.get('eq_gains', [0.0]*10)
         for i, (slider, label) in enumerate(self.eq_sliders):
@@ -377,10 +562,6 @@ class FXTab(QWidget):
         self.gain_slider.setValue(int(p.get('comp_gain', 12.0)*10))
         self.gain_slider.blockSignals(False)
         
-        idx = self.mode_combo_comp.findData(p.get('comp_mode', 1))
-        if idx >= 0:
-            self.mode_combo_comp.setCurrentIndex(idx)
-        
         self._on_comp_param_changed()
         self._update_enabled_state()
     
@@ -398,49 +579,15 @@ class FXTab(QWidget):
             self.profile_combo.blockSignals(False)
             self.current_profile_name = new
     
-    def _apply_fx(self):
-        """Ouvre EasyEffects ou applique les paramètres"""
-        if self.fx_mode == 'easyeffects':
-            self._open_easyeffects()
-            return
-        
-        # Mode interne : sauvegarder les profils
-        self._save_current_profile()
-        QMessageBox.information(
-            self, 
-            self.i18n.tr('success'), 
-            self.i18n.tr('fx_profiles_saved')
-        )
-    
-    def _open_easyeffects(self):
-        """Ouvre EasyEffects"""
-        try:
-            result = subprocess.run(['which', 'easyeffects'], capture_output=True, text=True)
-            if result.returncode != 0:
-                QMessageBox.warning(
-                    self, self.i18n.tr('error_title'),
-                    self.i18n.tr('fx_easyeffects_not_found')
-                )
-                return
-            
-            self.ee_process = subprocess.Popen(
-                ['easyeffects'],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True
-            )
-            self.logger.info(f"EasyEffects lancé (PID {self.ee_process.pid})")
-        except Exception as e:
-            self.logger.error(f"Erreur lancement EasyEffects: {e}")
-            QMessageBox.warning(self, self.i18n.tr('error_title'), str(e))
-    
     def refresh_language(self):
         self.enable_cb.setText(self.i18n.tr('fx_enable'))
         self.eq_gb.setTitle(self.i18n.tr('fx_eq_title'))
         self.comp_gb.setTitle(self.i18n.tr('fx_comp_title'))
         self.eq_enable_cb.setText(self.i18n.tr('fx_eq_enable'))
         self.comp_enable_cb.setText(self.i18n.tr('fx_comp_enable'))
-        self._update_mode_ui()
+        self.launch_btn.setText(self.i18n.tr('fx_launch_easyeffects'))
+        self.show_btn.setText(self.i18n.tr('fx_show_easyeffects'))
+        self.apply_btn.setText(self.i18n.tr('fx_apply_preset'))
     
     def shutdown(self):
         if self.ee_process:

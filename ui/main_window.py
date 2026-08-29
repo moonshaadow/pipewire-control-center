@@ -19,7 +19,7 @@ from .profiles_tab import ProfilesTab
 from .status_tab import StatusTab
 from .frequency_tab import FrequencyTab
 from .aes67_tab import Aes67Tab
-from .fx_tab import FXTab
+# from .fx_tab import FXTab  # Désactivé pour l'instant
 from .i18n import I18n, get_system_lang
 from .logger import Logger
 
@@ -55,12 +55,10 @@ class UIConfig:
         self.default_config = {
             'visible_tabs': {
                 'output': True, 'frequencies': True, 'buffer': True,
-                'devices': True, 'profiles': True, 'aes67': True, 'status': True,
-                'fx': True
+                'devices': True, 'profiles': True, 'aes67': True, 'status': True
             },
             'language': 'auto',
-            'close_behavior': 'tray',
-            'fx_mode': 'internal'  # 'internal' ou 'easyeffects'
+            'close_behavior': 'tray'
         }
         self.config = self._load()
     
@@ -76,8 +74,6 @@ class UIConfig:
                         config['language'] = loaded['language']
                     if 'close_behavior' in loaded:
                         config['close_behavior'] = loaded['close_behavior']
-                    if 'fx_mode' in loaded:
-                        config['fx_mode'] = loaded['fx_mode']
                     return config
             except Exception:
                 pass
@@ -141,24 +137,13 @@ class SettingsDialog(QDialog):
             self.close_combo.setCurrentIndex(idx)
         form_layout.addRow(self.i18n.tr('close_behavior') + ':', self.close_combo)
         
-        # Mode FX
-        self.fx_mode_combo = QComboBox()
-        self.fx_mode_combo.addItem(self.i18n.tr('fx_mode_internal'), 'internal')
-        self.fx_mode_combo.addItem(self.i18n.tr('fx_mode_easyeffects'), 'easyeffects')
-        current_fx_mode = ui_config.config.get('fx_mode', 'internal')
-        idx = self.fx_mode_combo.findData(current_fx_mode)
-        if idx >= 0:
-            self.fx_mode_combo.setCurrentIndex(idx)
-        form_layout.addRow(self.i18n.tr('fx_mode') + ':', self.fx_mode_combo)
-        
-        # Onglets visibles
+        # Onglets visibles (sans FX)
         tab_keys = [
             ('frequencies', 'Fréquences / Frequencies'),
             ('buffer', 'Buffer'),
             ('devices', 'Périphériques / Devices'),
             ('profiles', 'Profils / Profiles'),
             ('aes67', 'AES67'),
-            ('fx', 'FX'),
             ('status', 'État / Status')
         ]
         
@@ -189,7 +174,6 @@ class SettingsDialog(QDialog):
     def _on_save(self):
         self.ui_config.config['language'] = self.lang_combo.currentData()
         self.ui_config.config['close_behavior'] = self.close_combo.currentData()
-        self.ui_config.config['fx_mode'] = self.fx_mode_combo.currentData()
         for key, cb in self.tab_checkboxes.items():
             self.ui_config.config['visible_tabs'][key] = cb.isChecked()
         if self.ui_config.save():
@@ -207,7 +191,6 @@ class SettingsDialog(QDialog):
             if self.ui_config.reset():
                 self.lang_combo.setCurrentIndex(self.lang_combo.findData('auto'))
                 self.close_combo.setCurrentIndex(self.close_combo.findData('tray'))
-                self.fx_mode_combo.setCurrentIndex(self.fx_mode_combo.findData('internal'))
                 for cb in self.tab_checkboxes.values():
                     cb.setChecked(True)
                 QMessageBox.information(self, 'OK', self.i18n.tr('config_reset'))
@@ -267,7 +250,7 @@ class MainWindow(QMainWindow):
         self.buttons = []
         self.button_map = {}
         
-        all_tab_keys = ['output', 'frequencies', 'buffer', 'devices', 'profiles', 'aes67', 'fx', 'status']
+        all_tab_keys = ['output', 'frequencies', 'buffer', 'devices', 'profiles', 'aes67', 'status']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         
         btn_style = f"""
@@ -345,7 +328,6 @@ class MainWindow(QMainWindow):
         self.devices_tab = DevicesTab(self.pw)
         self.profiles_tab = ProfilesTab(self.pw, self.config_mgr)
         self.aes67_tab = Aes67Tab(self.pw)
-        self.fx_tab = FXTab(self.pw)
         self.status_tab = StatusTab(self.pw)
         
         self.all_tabs = {
@@ -355,7 +337,6 @@ class MainWindow(QMainWindow):
             'devices': self.devices_tab,
             'profiles': self.profiles_tab,
             'aes67': self.aes67_tab,
-            'fx': self.fx_tab,
             'status': self.status_tab
         }
         
@@ -385,7 +366,7 @@ class MainWindow(QMainWindow):
         settings.setValue('geometry', self.saveGeometry())
     
     def _install_shortcuts(self):
-        for i in range(1, 9):
+        for i in range(1, 8):
             shortcut = QShortcut(QKeySequence(f"Ctrl+{i}"), self)
             shortcut.activated.connect(lambda idx=i-1: self._goto_tab(idx))
         
@@ -399,7 +380,7 @@ class MainWindow(QMainWindow):
         quit_shortcut.activated.connect(self._quit_app)
     
     def _goto_tab(self, idx):
-        all_tab_keys = ['output', 'frequencies', 'buffer', 'devices', 'profiles', 'aes67', 'fx', 'status']
+        all_tab_keys = ['output', 'frequencies', 'buffer', 'devices', 'profiles', 'aes67', 'status']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         if idx < len(visible_keys):
             self.stack.setCurrentIndex(idx)
@@ -408,7 +389,7 @@ class MainWindow(QMainWindow):
     
     def _refresh_current_tab(self):
         current_idx = self.stack.currentIndex()
-        all_tab_keys = ['output', 'frequencies', 'buffer', 'devices', 'profiles', 'aes67', 'fx', 'status']
+        all_tab_keys = ['output', 'frequencies', 'buffer', 'devices', 'profiles', 'aes67', 'status']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         if current_idx < len(visible_keys):
             key = visible_keys[current_idx]
@@ -432,7 +413,6 @@ class MainWindow(QMainWindow):
         self.audio_tab.shutdown()
         self.status_tab.shutdown()
         self.aes67_tab.shutdown()
-        self.fx_tab.shutdown()
         QApplication.quit()
     
     def _rebuild_stack(self):
@@ -443,7 +423,7 @@ class MainWindow(QMainWindow):
         self.stack_tab_indices = {}
         self.tab_map = {}
         
-        all_tab_keys = ['output', 'frequencies', 'buffer', 'devices', 'profiles', 'aes67', 'fx', 'status']
+        all_tab_keys = ['output', 'frequencies', 'buffer', 'devices', 'profiles', 'aes67', 'status']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         
         for key in visible_keys:
@@ -492,7 +472,7 @@ class MainWindow(QMainWindow):
         self.buttons = []
         self.button_map = {}
         
-        all_tab_keys = ['output', 'frequencies', 'buffer', 'devices', 'profiles', 'aes67', 'fx', 'status']
+        all_tab_keys = ['output', 'frequencies', 'buffer', 'devices', 'profiles', 'aes67', 'status']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         
         btn_style = f"""
@@ -566,7 +546,6 @@ class MainWindow(QMainWindow):
             self.audio_tab.shutdown()
             self.status_tab.shutdown()
             self.aes67_tab.shutdown()
-            self.fx_tab.shutdown()
             event.accept()
             QApplication.quit()
         else:

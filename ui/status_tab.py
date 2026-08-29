@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Onglet d'état avec journal enrichi intégrant le journal AES67"""
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QTextEdit, QPushButton, QLabel
+"""Onglet d'état avec journal enrichi et boutons d'action"""
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QTextEdit,
+    QPushButton, QLabel, QMessageBox
+)
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QFont
 from datetime import datetime
 import subprocess
 import re
 import os
+from pathlib import Path
 from .i18n import I18n
 from .logger import Logger
 
@@ -40,6 +44,50 @@ class StatusTab(QWidget):
         self.version_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.version_lbl)
         
+        # Boutons d'action centrés
+        actions_layout = QHBoxLayout()
+        actions_layout.setSpacing(10)
+        actions_layout.addStretch(1)
+        
+        self.restart_btn = QPushButton(self.i18n.tr('redemarrer_services'))
+        self.restart_btn.setToolTip(self.i18n.tr('restart_btn_tooltip'))
+        self.restart_btn.setStyleSheet("""
+            QPushButton {
+                padding: 8px 16px;
+                font-weight: bold;
+                border: 1px solid #ff9800;
+                border-radius: 4px;
+                color: #ff9800;
+            }
+            QPushButton:hover {
+                background-color: #ff9800;
+                color: #000;
+            }
+        """)
+        self.restart_btn.clicked.connect(self._restart_services)
+        actions_layout.addWidget(self.restart_btn)
+        
+        self.clean_btn = QPushButton(self.i18n.tr('nettoyer_configs'))
+        self.clean_btn.setToolTip(self.i18n.tr('clean_btn_tooltip'))
+        self.clean_btn.setStyleSheet("""
+            QPushButton {
+                padding: 8px 16px;
+                font-weight: bold;
+                border: 1px solid #ef5350;
+                border-radius: 4px;
+                color: #ef5350;
+            }
+            QPushButton:hover {
+                background-color: #ef5350;
+                color: #000;
+            }
+        """)
+        self.clean_btn.clicked.connect(self._clean_all_configs)
+        actions_layout.addWidget(self.clean_btn)
+        
+        actions_layout.addStretch(1)
+        layout.addLayout(actions_layout)
+        
         # Système
         self.sys_gb = QGroupBox(self.i18n.tr('systeme'))
         sys_layout = QVBoxLayout()
@@ -47,11 +95,11 @@ class StatusTab(QWidget):
         self.sys_text.setReadOnly(True)
         self.sys_text.setFont(QFont("Monospace", 9))
         self.sys_text.setStyleSheet("color: #ccc; padding: 8px; background-color: #2a2a2a; border-radius: 4px; border: none;")
-        self.sys_text.setFixedHeight(185)
+        self.sys_text.setFixedHeight(150)
         self.sys_text.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._update_sys()
         sys_layout.addWidget(self.sys_text)
-        self.refresh_sys_btn = QPushButton("🔄 " + self.i18n.tr('rafraichir'))
+        self.refresh_sys_btn = QPushButton(self.i18n.tr('rafraichir'))
         self.refresh_sys_btn.clicked.connect(self._update_sys)
         sys_layout.addWidget(self.refresh_sys_btn, alignment=Qt.AlignmentFlag.AlignRight)
         self.sys_gb.setLayout(sys_layout)
@@ -64,10 +112,9 @@ class StatusTab(QWidget):
         self.events_text.setReadOnly(True)
         self.events_text.setFont(QFont("Monospace", 8))
         self.events_text.setStyleSheet("background-color: #1e1e1e; color: #aaa; border: 1px solid #333;")
-        self.events_text.setMinimumHeight(250)
+        self.events_text.setMinimumHeight(200)
         events_layout.addWidget(self.events_text)
         
-        # Boutons du journal
         btn_layout = QHBoxLayout()
         self.clear_btn = QPushButton(self.i18n.tr('effacer'))
         self.clear_btn.clicked.connect(lambda: (self._events.clear(), self._refresh_events()))
@@ -88,6 +135,82 @@ class StatusTab(QWidget):
         self.events_gb.setLayout(events_layout)
         layout.addWidget(self.events_gb)
         self.setLayout(layout)
+    
+    def _restart_services(self):
+        """Redémarre PipeWire et WirePlumber"""
+        reply = QMessageBox.question(
+            self,
+            self.i18n.tr('confirmation'),
+            self.i18n.tr('restart_confirm') + "\n\n" + self.i18n.tr('restart_warning'),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            ok, msg = self.pw.restart_services()
+            if ok:
+                self._log(msg, "#4CAF50", self.i18n.tr('category_audio'))
+            else:
+                self._log(msg, "#ef5350", self.i18n.tr('category_audio'))
+    
+    def _clean_all_configs(self):
+        """Supprime toutes les configurations locales"""
+        pipewire_dir = Path.home() / '.config' / 'pipewire' / 'pipewire.conf.d'
+        wireplumber_dir = Path.home() / '.config' / 'wireplumber' / 'main.lua.d'
+        
+        files_to_delete = []
+        if pipewire_dir.exists():
+            files_to_delete.extend(pipewire_dir.glob('*.conf'))
+        if wireplumber_dir.exists():
+            files_to_delete.extend(wireplumber_dir.glob('*.lua'))
+        
+        if not files_to_delete:
+            QMessageBox.information(self, self.i18n.tr('info'), self.i18n.tr('no_local_config'))
+            return
+        
+        file_list = '\n'.join(f"  • {f}" for f in files_to_delete)
+        
+        reply = QMessageBox.question(
+            self,
+            self.i18n.tr('confirmation'),
+            self.i18n.tr('clean_confirm').format(file_list=file_list),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        errors = []
+        for f in files_to_delete:
+            try:
+                f.unlink()
+                self.logger.info(f"Fichier supprimé: {f}")
+            except Exception as e:
+                errors.append(str(e))
+                self.logger.error(f"Erreur suppression {f}: {e}")
+        
+        # Supprimer les dossiers vides
+        try:
+            if pipewire_dir.exists():
+                pipewire_dir.rmdir()
+        except Exception:
+            pass
+        try:
+            if wireplumber_dir.exists():
+                wireplumber_dir.rmdir()
+        except Exception:
+            pass
+        
+        if errors:
+            self._log(self.i18n.tr('clean_errors').format(errors='\n'.join(errors)), "#ef5350", self.i18n.tr('category_general'))
+        else:
+            self._log(self.i18n.tr('clean_configs_success'), "#4CAF50", self.i18n.tr('category_general'))
+            # Redémarrer les services
+            ok, msg = self.pw.restart_services()
+            if ok:
+                self._log(msg, "#4CAF50", self.i18n.tr('category_audio'))
+            else:
+                self._log(msg, "#ef5350", self.i18n.tr('category_audio'))
     
     def _update_sys(self):
         try:
@@ -115,10 +238,8 @@ class StatusTab(QWidget):
             latency_ms = (quantum / rate) * 1000 if rate else 0
             
             xruns = self._get_xruns()
-            
             aes67_state = self._get_aes67_state()
             ptp_state = self._get_ptp_state()
-            
             detected_str = self.i18n.tr('detected')
             
             self.sys_text.setHtml(
@@ -227,9 +348,8 @@ class StatusTab(QWidget):
                     self._log(self.i18n.tr('ptp_desync'), "#ef5350", self.i18n.tr('category_ptp'))
             
             self._check_aes67_logs()
-            
-        except Exception as e:
-            self.logger.error(f"Erreur: {e}")
+        except Exception:
+            pass
     
     def _check_aes67_logs(self):
         try:
@@ -254,8 +374,8 @@ class StatusTab(QWidget):
                             if line:
                                 self._log(line, "#00bcd4", self.i18n.tr('category_aes67'))
                         self._prev_aes67_log_size = len(lines)
-        except Exception as e:
-            self.logger.error(f"Erreur: {e}")
+        except Exception:
+            pass
     
     def _check_ptp_desync(self):
         try:
@@ -273,8 +393,12 @@ class StatusTab(QWidget):
     def refresh_language(self):
         self.sys_gb.setTitle(self.i18n.tr('systeme'))
         self.events_gb.setTitle(self.i18n.tr('journal'))
-        self.refresh_sys_btn.setText("🔄 " + self.i18n.tr('rafraichir'))
+        self.refresh_sys_btn.setText(self.i18n.tr('rafraichir'))
         self.clear_btn.setText(self.i18n.tr('effacer'))
+        self.restart_btn.setText(self.i18n.tr('redemarrer_services'))
+        self.restart_btn.setToolTip(self.i18n.tr('restart_btn_tooltip'))
+        self.clean_btn.setText(self.i18n.tr('nettoyer_configs'))
+        self.clean_btn.setToolTip(self.i18n.tr('clean_btn_tooltip'))
         self.auto_scroll_cb.setText(
             self.i18n.tr('auto_scroll_on') if self.auto_scroll_cb.isChecked() else self.i18n.tr('auto_scroll_off')
         )
