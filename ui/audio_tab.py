@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Onglet Audio : périphériques de sortie et d'entrée"""
+"""Onglet Audio Devices : sorties, entrées et périphériques"""
 import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QStackedWidget, QButtonGroup,
     QPushButton, QLabel, QMessageBox, QFrame, QScrollArea,
-    QSlider, QCheckBox, QStyle
+    QSlider, QCheckBox, QStyle, QTreeWidget, QTreeWidgetItem, QMenu
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
-from PyQt6.QtGui import QFont, QPixmap
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSettings
+from PyQt6.QtGui import QFont, QPixmap, QIcon, QAction
 from .icon_utils import get_device_icon_path
 from .i18n import I18n
 from .logger import Logger
@@ -409,7 +409,7 @@ class StreamRow(QFrame):
             self.slider.blockSignals(False)
 
 
-# --- Onglet Audio principal ---
+# --- Onglet Audio Devices principal ---
 class AudioTab(QWidget):
     def __init__(self, pw):
         super().__init__()
@@ -424,6 +424,7 @@ class AudioTab(QWidget):
         self._prev_device_names = set()
         self._init_ui()
         self.refresh_devices()
+        self._refresh_devices_table()
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._update)
@@ -443,7 +444,11 @@ class AudioTab(QWidget):
         self.sub_btn_group.setExclusive(True)
         
         self.sub_buttons = []
-        sub_pages = [(self.i18n.tr('sorties'), 0), (self.i18n.tr('entrees'), 1)]
+        sub_pages = [
+            (self.i18n.tr('sorties'), 0),
+            (self.i18n.tr('entrees'), 1),
+            (self.i18n.tr('devices'), 2)
+        ]
         
         sub_btn_style = """
             QPushButton {
@@ -476,7 +481,7 @@ class AudioTab(QWidget):
         sub_nav_layout.addStretch()
         layout.addLayout(sub_nav_layout)
         
-        # Stack pour les pages Sorties/Entrées
+        # Stack pour les pages
         self.sub_stack = QStackedWidget()
         
         # Page Sorties
@@ -531,13 +536,80 @@ class AudioTab(QWidget):
         self.input_tab.setLayout(input_layout)
         self.sub_stack.addWidget(self.input_tab)
         
+        # Page Périphériques (déplacée depuis DevicesTab)
+        self.devices_page = QWidget()
+        devices_page_layout = QVBoxLayout()
+        devices_page_layout.setSpacing(8)
+        devices_page_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Tableau des périphériques
+        self.devices_gb = QGroupBox(self.i18n.tr('peripheriques_detectes'))
+        devices_layout = QVBoxLayout()
+        
+        self.devices_tree = QTreeWidget()
+        self.devices_tree.setHeaderLabels([
+            self.i18n.tr('id'), self.i18n.tr('description'), self.i18n.tr('type'),
+            self.i18n.tr('state'), self.i18n.tr('rate'), self.i18n.tr('format'),
+            self.i18n.tr('range')
+        ])
+        self.devices_tree.setColumnWidth(0, 50)
+        self.devices_tree.setColumnWidth(1, 220)
+        self.devices_tree.setColumnWidth(6, 140)
+        devices_layout.addWidget(self.devices_tree)
+        
+        # Boutons d'action
+        devices_btn_layout = QHBoxLayout()
+        self.set_default_btn = QPushButton(self.i18n.tr('definir_defaut'))
+        self.set_default_btn.clicked.connect(self._set_default_device)
+        devices_btn_layout.addWidget(self.set_default_btn)
+        devices_btn_layout.addStretch()
+        devices_layout.addLayout(devices_btn_layout)
+        
+        # Mode suppression
+        self.destroy_cb = QCheckBox(self.i18n.tr('mode_suppression'))
+        self.destroy_cb.setStyleSheet("color: #ef5350; font-weight: bold;")
+        self.destroy_cb.stateChanged.connect(self._on_destroy_state_changed)
+        devices_layout.addWidget(self.destroy_cb)
+        
+        self.destroy_btn = QPushButton(self.i18n.tr('supprimer_noeud'))
+        self.destroy_btn.setStyleSheet("QPushButton { color: #ef5350; font-weight: bold; }")
+        self.destroy_btn.clicked.connect(self._destroy_node)
+        self.destroy_btn.setVisible(False)
+        devices_layout.addWidget(self.destroy_btn)
+        
+        self.devices_gb.setLayout(devices_layout)
+        devices_page_layout.addWidget(self.devices_gb)
+        
+        # Tableau des applications
+        self.apps_gb = QGroupBox(self.i18n.tr('applications'))
+        apps_layout = QVBoxLayout()
+        
+        self.apps_tree = QTreeWidget()
+        self.apps_tree.setHeaderLabels([
+            self.i18n.tr('id'), self.i18n.tr('application'), self.i18n.tr('type'),
+            self.i18n.tr('state'), self.i18n.tr('rate'), self.i18n.tr('format'),
+            self.i18n.tr('linked_device')
+        ])
+        self.apps_tree.setColumnWidth(0, 50)
+        self.apps_tree.setColumnWidth(1, 180)
+        self.apps_tree.setColumnWidth(6, 200)
+        self.apps_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.apps_tree.customContextMenuRequested.connect(self._show_app_context_menu)
+        apps_layout.addWidget(self.apps_tree)
+        
+        self.apps_gb.setLayout(apps_layout)
+        devices_page_layout.addWidget(self.apps_gb)
+        
+        self.devices_page.setLayout(devices_page_layout)
+        self.sub_stack.addWidget(self.devices_page)
+        
         layout.addWidget(self.sub_stack)
         
         # Sélection par défaut
         self.sub_buttons[0].setChecked(True)
-        self.sub_btn_group.idClicked.connect(self.sub_stack.setCurrentIndex)
+        self.sub_btn_group.idClicked.connect(self._on_sub_nav)
         
-        # Flux actifs
+        # Flux actifs (visible seulement dans Sorties)
         self.flux_gb = QGroupBox(self.i18n.tr('flux_actifs'))
         flux_layout = QVBoxLayout()
         
@@ -562,9 +634,298 @@ class AudioTab(QWidget):
         flux_layout.addWidget(self.empty_lbl)
         
         self.flux_gb.setLayout(flux_layout)
-        layout.addWidget(self.flux_gb)
+        self.output_tab.layout().addWidget(self.flux_gb)
+        
+        # Restaurer l'état des colonnes
+        self._restore_header_state()
         
         self.setLayout(layout)
+    
+    def _on_sub_nav(self, idx):
+        self.sub_stack.setCurrentIndex(idx)
+        if idx == 2:  # Page Périphériques
+            self._refresh_devices_table()
+    
+    def _restore_header_state(self):
+        try:
+            settings = QSettings('PipeWireControlCenter', 'DevicesTab')
+            devices_state = settings.value('devices_header_state')
+            if devices_state is not None:
+                self.devices_tree.header().restoreState(devices_state)
+            apps_state = settings.value('apps_header_state')
+            if apps_state is not None:
+                self.apps_tree.header().restoreState(apps_state)
+        except Exception as e:
+            self.logger.error(f"Erreur restauration colonnes: {e}")
+    
+    def _save_header_state(self):
+        try:
+            settings = QSettings('PipeWireControlCenter', 'DevicesTab')
+            settings.setValue('devices_header_state', self.devices_tree.header().saveState())
+            settings.setValue('apps_header_state', self.apps_tree.header().saveState())
+            settings.sync()
+        except Exception as e:
+            self.logger.error(f"Erreur sauvegarde colonnes: {e}")
+    
+    def _refresh_devices_table(self):
+        """Rafraîchit les tableaux Périphériques et Applications"""
+        # Sauvegarder la sélection
+        selected_item = self.devices_tree.currentItem()
+        selected_id = None
+        if selected_item:
+            selected_text = selected_item.text(0).replace(" ★", "")
+            try:
+                selected_id = int(selected_text)
+            except ValueError:
+                selected_id = None
+        
+        self.devices_tree.clear()
+        devices = self.pw.get_devices()
+        
+        for dev in devices:
+            rate_str = f"{dev['rate']} Hz" if dev['rate'] != '?' else '?'
+            
+            if dev['rates_min'] and dev['rates_max']:
+                range_str = f"{dev['rates_min']}-{dev['rates_max']} Hz"
+            elif dev['rates_default']:
+                range_str = f"{dev['rates_default']} Hz (fixe)"
+            else:
+                range_str = "?"
+            
+            fmt_str = str(dev['format']) if dev['format'] != '?' else '?'
+            if dev.get('bits'):
+                fmt_str += f" / {dev['bits']} bits"
+            
+            item = QTreeWidgetItem([
+                str(dev['id']),
+                dev['description'],
+                dev['type'],
+                dev['state'],
+                rate_str,
+                fmt_str,
+                range_str
+            ])
+            
+            icon_path = get_device_icon_path(dev)
+            if icon_path and os.path.exists(icon_path):
+                item.setIcon(1, QIcon(icon_path))
+            
+            if dev['is_default']:
+                font = item.font(0)
+                font.setBold(True)
+                for i in range(7):
+                    item.setFont(i, font)
+                item.setText(0, item.text(0) + " ★")
+            
+            if dev['state'] == 'running':
+                item.setForeground(3, Qt.GlobalColor.green)
+            elif dev['state'] == 'idle':
+                item.setForeground(3, Qt.GlobalColor.gray)
+            
+            self.devices_tree.addTopLevelItem(item)
+            
+            if selected_id is not None and dev['id'] == selected_id:
+                self.devices_tree.setCurrentItem(item)
+        
+        # Rafraîchir le tableau des applications
+        self._refresh_apps_table()
+    
+    def _refresh_apps_table(self):
+        """Rafraîchit le tableau des nœuds d'application"""
+        selected_item = self.apps_tree.currentItem()
+        selected_id = None
+        if selected_item:
+            selected_id = selected_item.data(0, Qt.ItemDataRole.UserRole)
+        
+        self.apps_tree.clear()
+        
+        data = self.pw._get_pw_dump()
+        devices = {d['id']: d for d in self.pw.get_devices()}
+        
+        for item in data:
+            if item.get('type') != 'PipeWire:Interface:Node':
+                continue
+            
+            info = item.get('info', {})
+            props = info.get('props', {})
+            media_class = props.get('media.class', '')
+            
+            if media_class not in ('Stream/Output/Audio', 'Stream/Input/Audio'):
+                continue
+            
+            node_name = props.get('node.name', '')
+            if 'monitor' in node_name.lower() or node_name in ('pipewire', 'WirePlumber'):
+                continue
+            
+            app_name = props.get('application.name') or props.get('node.name', 'Inconnu')
+            node_id = item.get('id', 0)
+            state = info.get('state', 'idle')
+            
+            params = info.get('params', {})
+            fmt = (params.get('Format', [{}]) or [{}])[0]
+            rate = fmt.get('rate', '?')
+            fmt_str = fmt.get('format', '?')
+            
+            rate_str = f"{rate} Hz" if rate != '?' else '?'
+            
+            if 'Output' in media_class:
+                type_str = self.i18n.tr('sortie')
+            else:
+                type_str = self.i18n.tr('entree')
+            
+            linked_device = ''
+            if 'Output' in media_class:
+                sink_id = props.get('node.target') or props.get('target.object')
+                if sink_id:
+                    try:
+                        sink_id_int = int(sink_id)
+                        if sink_id_int in devices:
+                            linked_device = devices[sink_id_int].get('description', sink_id)
+                    except (ValueError, TypeError):
+                        pass
+                if not linked_device:
+                    for link in data:
+                        if link.get('type') == 'PipeWire:Interface:Link':
+                            link_info = link.get('info', {})
+                            if link_info.get('output-node-id') == node_id:
+                                sink_id = link_info.get('input-node-id')
+                                if sink_id and sink_id in devices:
+                                    linked_device = devices[sink_id].get('description', str(sink_id))
+                                    break
+            else:
+                source_id = props.get('node.target') or props.get('target.object')
+                if source_id:
+                    try:
+                        source_id_int = int(source_id)
+                        if source_id_int in devices:
+                            linked_device = devices[source_id_int].get('description', source_id)
+                    except (ValueError, TypeError):
+                        pass
+                if not linked_device:
+                    for link in data:
+                        if link.get('type') == 'PipeWire:Interface:Link':
+                            link_info = link.get('info', {})
+                            if link_info.get('input-node-id') == node_id:
+                                source_id = link_info.get('output-node-id')
+                                if source_id and source_id in devices:
+                                    linked_device = devices[source_id].get('description', str(source_id))
+                                    break
+            
+            app_item = QTreeWidgetItem([
+                str(node_id),
+                app_name,
+                type_str,
+                state,
+                rate_str,
+                str(fmt_str) if fmt_str != '?' else '?',
+                linked_device if linked_device else '?'
+            ])
+            
+            app_item.setData(0, Qt.ItemDataRole.UserRole, node_id)
+            app_item.setData(1, Qt.ItemDataRole.UserRole, app_name)
+            
+            if state == 'running':
+                app_item.setForeground(3, Qt.GlobalColor.green)
+            elif state == 'idle':
+                app_item.setForeground(3, Qt.GlobalColor.gray)
+            else:
+                app_item.setForeground(3, Qt.GlobalColor.orange)
+            
+            self.apps_tree.addTopLevelItem(app_item)
+            
+            if selected_id is not None and node_id == selected_id:
+                self.apps_tree.setCurrentItem(app_item)
+    
+    def _show_app_context_menu(self, pos):
+        item = self.apps_tree.itemAt(pos)
+        if not item:
+            return
+        
+        node_id = item.data(0, Qt.ItemDataRole.UserRole)
+        app_name = item.data(1, Qt.ItemDataRole.UserRole)
+        
+        if not node_id:
+            return
+        
+        menu = QMenu(self)
+        kill_action = QAction(f"🗑 {self.i18n.tr('supprimer_noeud')} : {app_name}", self)
+        kill_action.triggered.connect(lambda: self._kill_app_node(node_id, app_name))
+        menu.addAction(kill_action)
+        menu.exec(self.apps_tree.viewport().mapToGlobal(pos))
+    
+    def _kill_app_node(self, node_id, app_name):
+        reply = QMessageBox.warning(
+            self,
+            self.i18n.tr('confirmation'),
+            f"Supprimer le flux de « {app_name} » (ID {node_id}) ?\n\n"
+            "Cette action détruira le nœud PipeWire de l'application.\n"
+            "L'application devra peut-être être redémarrée pour recréer son flux.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            ok, err = self.pw.destroy_node(node_id)
+            if ok:
+                self.pw.invalidate_cache()
+                self._refresh_devices_table()
+                QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('node_destroyed'))
+            else:
+                QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('node_destroy_error') + f"\n{err}")
+    
+    def _set_default_device(self):
+        item = self.devices_tree.currentItem()
+        if not item:
+            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('select_device'))
+            return
+        
+        dev_id = int(item.text(0).replace(" ★", ""))
+        if self.pw.set_default_device(dev_id):
+            self._refresh_devices_table()
+            QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('device_default_changed'))
+        else:
+            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('device_default_error'))
+    
+    def _on_destroy_state_changed(self, state):
+        checked = state == 2
+        if checked:
+            reply = QMessageBox.warning(
+                self,
+                "⚠️ " + self.i18n.tr('mode_suppression'),
+                self.i18n.tr('destroy_warning'),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.No:
+                self.destroy_cb.blockSignals(True)
+                self.destroy_cb.setChecked(False)
+                self.destroy_cb.blockSignals(False)
+                return
+        self.destroy_btn.setVisible(checked)
+    
+    def _destroy_node(self):
+        item = self.devices_tree.currentItem()
+        if not item:
+            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('select_device'))
+            return
+        
+        dev_id = int(item.text(0).replace(" ★", ""))
+        dev_name = item.text(1)
+        
+        reply = QMessageBox.question(
+            self,
+            self.i18n.tr('confirmation'),
+            self.i18n.tr('node_destroy_warning') + f"\n\n{dev_name} (ID {dev_id})"
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            ok, err = self.pw.destroy_node(dev_id)
+            if ok:
+                self.pw.invalidate_cache()
+                self._refresh_devices_table()
+                QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('node_destroyed'))
+            else:
+                QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('node_destroy_error') + f"\n{err}")
     
     def _sort_devices(self, devices):
         return sorted(
@@ -677,6 +1038,10 @@ class AudioTab(QWidget):
             self._refresh_devices_silent(data)
         
         self._update_streams(data)
+        
+        # Si la page Périphériques est visible, rafraîchir les tableaux
+        if self.sub_stack.currentIndex() == 2:
+            self._refresh_devices_table()
     
     def _refresh_devices_silent(self, data):
         sinks = self._sort_devices(
@@ -797,15 +1162,22 @@ class AudioTab(QWidget):
     
     def load_current(self):
         self.refresh_devices()
+        self._refresh_devices_table()
     
     def refresh_language(self):
         self.sub_buttons[0].setText(self.i18n.tr('sorties'))
         self.sub_buttons[1].setText(self.i18n.tr('entrees'))
+        self.sub_buttons[2].setText(self.i18n.tr('devices'))
         self.output_gb.setTitle(self.i18n.tr('peripheriques_sortie'))
         self.input_gb.setTitle(self.i18n.tr('peripheriques_entree'))
         self.flux_gb.setTitle(self.i18n.tr('flux_actifs'))
         self.empty_lbl.setText(self.i18n.tr('aucun_flux'))
+        self.devices_gb.setTitle(self.i18n.tr('peripheriques_detectes'))
+        self.apps_gb.setTitle(self.i18n.tr('applications'))
+        self.set_default_btn.setText(self.i18n.tr('definir_defaut'))
+        self.destroy_cb.setText(self.i18n.tr('mode_suppression'))
+        self.destroy_btn.setText(self.i18n.tr('supprimer_noeud'))
     
     def shutdown(self):
-        self.logger.debug("Arrêt du timer AudioTab")
+        self._save_header_state()
         self.timer.stop()
