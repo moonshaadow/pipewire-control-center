@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Onglet Audio Devices : sorties, entrées et périphériques"""
+"""Onglet Audio : sorties, entrées et périphériques"""
 import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QStackedWidget, QButtonGroup,
@@ -409,7 +409,7 @@ class StreamRow(QFrame):
             self.slider.blockSignals(False)
 
 
-# --- Onglet Audio Devices principal ---
+# --- Onglet Audio principal ---
 class AudioTab(QWidget):
     def __init__(self, pw):
         super().__init__()
@@ -536,13 +536,12 @@ class AudioTab(QWidget):
         self.input_tab.setLayout(input_layout)
         self.sub_stack.addWidget(self.input_tab)
         
-        # Page Périphériques (déplacée depuis DevicesTab)
+        # Page Périphériques
         self.devices_page = QWidget()
         devices_page_layout = QVBoxLayout()
         devices_page_layout.setSpacing(8)
         devices_page_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Tableau des périphériques
         self.devices_gb = QGroupBox(self.i18n.tr('peripheriques_detectes'))
         devices_layout = QVBoxLayout()
         
@@ -557,7 +556,6 @@ class AudioTab(QWidget):
         self.devices_tree.setColumnWidth(6, 140)
         devices_layout.addWidget(self.devices_tree)
         
-        # Boutons d'action
         devices_btn_layout = QHBoxLayout()
         self.set_default_btn = QPushButton(self.i18n.tr('definir_defaut'))
         self.set_default_btn.clicked.connect(self._set_default_device)
@@ -565,7 +563,6 @@ class AudioTab(QWidget):
         devices_btn_layout.addStretch()
         devices_layout.addLayout(devices_btn_layout)
         
-        # Mode suppression
         self.destroy_cb = QCheckBox(self.i18n.tr('mode_suppression'))
         self.destroy_cb.setStyleSheet("color: #ef5350; font-weight: bold;")
         self.destroy_cb.stateChanged.connect(self._on_destroy_state_changed)
@@ -580,7 +577,6 @@ class AudioTab(QWidget):
         self.devices_gb.setLayout(devices_layout)
         devices_page_layout.addWidget(self.devices_gb)
         
-        # Tableau des applications
         self.apps_gb = QGroupBox(self.i18n.tr('applications'))
         apps_layout = QVBoxLayout()
         
@@ -605,11 +601,7 @@ class AudioTab(QWidget):
         
         layout.addWidget(self.sub_stack)
         
-        # Sélection par défaut
-        self.sub_buttons[0].setChecked(True)
-        self.sub_btn_group.idClicked.connect(self._on_sub_nav)
-        
-        # Flux actifs (visible seulement dans Sorties)
+        # Flux actifs - commun aux pages Sorties et Entrées, caché pour Périphériques
         self.flux_gb = QGroupBox(self.i18n.tr('flux_actifs'))
         flux_layout = QVBoxLayout()
         
@@ -622,7 +614,7 @@ class AudioTab(QWidget):
         self.streams_scroll = QScrollArea()
         self.streams_scroll.setWidgetResizable(True)
         self.streams_scroll.setWidget(self.streams_widget)
-        self.streams_scroll.setMaximumHeight(180)
+        self.streams_scroll.setMaximumHeight(150)
         self.streams_scroll.setStyleSheet("QScrollArea { border: none; }")
         flux_layout.addWidget(self.streams_scroll)
         
@@ -634,17 +626,24 @@ class AudioTab(QWidget):
         flux_layout.addWidget(self.empty_lbl)
         
         self.flux_gb.setLayout(flux_layout)
-        self.output_tab.layout().addWidget(self.flux_gb)
+        layout.addWidget(self.flux_gb)
         
-        # Restaurer l'état des colonnes
+        self.sub_buttons[0].setChecked(True)
+        self.sub_btn_group.idClicked.connect(self._on_sub_nav)
+        
         self._restore_header_state()
         
         self.setLayout(layout)
     
     def _on_sub_nav(self, idx):
         self.sub_stack.setCurrentIndex(idx)
-        if idx == 2:  # Page Périphériques
+        if idx == 2:
             self._refresh_devices_table()
+            # Cacher les flux actifs quand on est sur Périphériques
+            self.flux_gb.setVisible(False)
+        else:
+            # Afficher les flux actifs pour Sorties et Entrées
+            self.flux_gb.setVisible(True)
     
     def _restore_header_state(self):
         try:
@@ -668,8 +667,6 @@ class AudioTab(QWidget):
             self.logger.error(f"Erreur sauvegarde colonnes: {e}")
     
     def _refresh_devices_table(self):
-        """Rafraîchit les tableaux Périphériques et Applications"""
-        # Sauvegarder la sélection
         selected_item = self.devices_tree.currentItem()
         selected_id = None
         if selected_item:
@@ -727,11 +724,9 @@ class AudioTab(QWidget):
             if selected_id is not None and dev['id'] == selected_id:
                 self.devices_tree.setCurrentItem(item)
         
-        # Rafraîchir le tableau des applications
         self._refresh_apps_table()
     
     def _refresh_apps_table(self):
-        """Rafraîchit le tableau des nœuds d'application"""
         selected_item = self.apps_tree.currentItem()
         selected_id = None
         if selected_item:
@@ -1039,7 +1034,6 @@ class AudioTab(QWidget):
         
         self._update_streams(data)
         
-        # Si la page Périphériques est visible, rafraîchir les tableaux
         if self.sub_stack.currentIndex() == 2:
             self._refresh_devices_table()
     
@@ -1112,17 +1106,22 @@ class AudioTab(QWidget):
     
     def _update_streams(self, data):
         current_ids = set()
+        
         for item in data:
             info = item.get('info', {})
             props = info.get('props', {})
-            if props.get('media.class') != 'Stream/Output/Audio' or info.get('state') != 'running':
+            media_class = props.get('media.class', '')
+            
+            if media_class not in ('Stream/Output/Audio', 'Stream/Input/Audio') or info.get('state') != 'running':
                 continue
+            
             app = props.get('application.name') or props.get('node.name', '')
             if app in ('pipewire', 'WirePlumber', 'pw-dump'):
                 continue
             
             sid = str(item.get('id', 0))
             current_ids.add(sid)
+            
             enum = (info.get('params', {}).get('EnumFormat', [{}]) or [{}])[0]
             rate = enum.get('rate', '?')
             
