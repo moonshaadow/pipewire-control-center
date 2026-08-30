@@ -1,5 +1,5 @@
 # PipeWire Control Center (PCC)
-<<<<<<< HEAD
+
 
 Interface graphique de configuration avancée pour PipeWire, avec notamment gestion fine des samplerates et du buffer, et prise en charge d'AES67.
 
@@ -22,9 +22,6 @@ A VENIR :
 - Gestion de profils audio permettant égalisation et compression en fonction du contexte
 
 =======
-
-Advanced graphical configuration interface for PipeWire, featuring fine-grained control of sample rates and buffer sizes, as well as AES67 support.
->>>>>>> da07098 (Ajout du système i18n complet (FR/EN), configuration UI, comportement fermeture, journal enrichi AES67/PTP)
 
 WARNINGS:
 
@@ -127,16 +124,17 @@ pipewire-control-center/
 ├── uninstall.sh            # Uninstallation script
 ├── requirements.txt        # Python dependencies
 ├── ui/
-│   ├── __init__.py         # UI package
-│   ├── main_window.py      # Main window with navigation
-│   ├── audio_tab.py        # Audio tab (outputs, inputs, streams)
-│   ├── frequency_tab.py    # Frequencies tab
-│   ├── buffer_tab.py       # Buffer/Latency tab
-│   ├── devices_tab.py      # Devices tab
-│   ├── aes67_tab.py        # AES67 tab
-│   ├── profiles_tab.py     # Profiles tab
-│   ├── status_tab.py       # Status/Log tab
-│   └── icon_utils.py       # Shared icon utilities
+|    ├── __init__.py
+|    ├── main_window.py      # Fenêtre principale
+|    ├── audio_tab.py        # Onglet Audio (Sorties, Entrées, Périphériques)
+|    ├── settings_tab.py     # Onglet Réglages (Fréquences, Buffer)
+|    ├── profiles_tab.py     # Onglet Profils
+|    ├── aes67_tab.py        # Onglet AES67
+|    ├── status_tab.py       # Onglet État
+|    ├── fx_tab.py           # Conservé pour réutilisation future
+|    ├── i18n.py             # Traductions
+|    ├── logger.py           # Logging
+|    └── icon_utils.py       # Utilitaires icônes
 └── icons/
     ├── hdmi.svg
     ├── headphone.svg
