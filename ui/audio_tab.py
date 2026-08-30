@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Onglet Audio : sorties, entrées et périphériques"""
 import os
+import subprocess
+import re
+import time
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QStackedWidget, QButtonGroup,
     QPushButton, QLabel, QMessageBox, QFrame, QScrollArea,
@@ -351,27 +354,39 @@ class StreamRow(QFrame):
         self.logger = Logger.instance()
         self.setFrameStyle(QFrame.Shape.NoFrame)
         self.setStyleSheet("background-color: #2a2a2a; border-radius: 4px; margin: 1px 0;")
-        self.setFixedHeight(36)
         
         layout = QHBoxLayout()
-        layout.setContentsMargins(8, 2, 8, 2)
+        layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(10)
         
-        self.name_lbl = QLabel(stream.get('name', '')[:22])
+        self.icon_lbl = QLabel()
+        self.icon_lbl.setFixedSize(24, 24)
+        self._update_icon()
+        self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.icon_lbl)
+        
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(1)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.name_lbl = QLabel(stream.get('name', '')[:30])
         self.name_lbl.setFont(QFont("Monospace", 8))
         self.name_lbl.setStyleSheet("color: #aaaaaa;")
-        self.name_lbl.setFixedWidth(140)
-        layout.addWidget(self.name_lbl)
+        text_layout.addWidget(self.name_lbl)
         
-        rate = stream.get('rate', '?')
-        rate_text = "?"
-        if rate != '?' and rate is not None:
-            r = int(rate)
-            rate_text = f"{r/1000:.1f}k" if r >= 1000 else f"{r} Hz"
-        self.rate_lbl = QLabel(rate_text)
+        self.meta_lbl = QLabel("")
+        self.meta_lbl.setFont(QFont("Monospace", 7))
+        self.meta_lbl.setStyleSheet("color: #666;")
+        self.meta_lbl.setVisible(False)
+        text_layout.addWidget(self.meta_lbl)
+        
+        layout.addLayout(text_layout, 1)
+        
+        self.rate_lbl = QLabel("?")
         self.rate_lbl.setFont(QFont("Monospace", 7))
         self.rate_lbl.setStyleSheet("color: #888888;")
         self.rate_lbl.setFixedWidth(55)
+        self.rate_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.rate_lbl)
         
         self.slider = ClickSlider(Qt.Orientation.Horizontal)
@@ -391,6 +406,54 @@ class StreamRow(QFrame):
         layout.addWidget(self.vol_lbl, alignment=Qt.AlignmentFlag.AlignVCenter)
         
         self.setLayout(layout)
+        self._update_metadata()
+    
+    def _update_icon(self):
+        icon_name = self.stream.get('icon_name', '')
+        if icon_name:
+            icon = QIcon.fromTheme(icon_name)
+            if not icon.isNull():
+                self.icon_lbl.setPixmap(icon.pixmap(24, 24))
+                return
+            icon = QIcon.fromTheme(icon_name.lower())
+            if not icon.isNull():
+                self.icon_lbl.setPixmap(icon.pixmap(24, 24))
+                return
+        self.icon_lbl.setText("🎵")
+        self.icon_lbl.setFont(QFont("Monospace", 12))
+    
+    def _update_metadata(self):
+        media_title = self.stream.get('media_title', '')
+        media_name = self.stream.get('media_name', '')
+        media_artist = self.stream.get('media_artist', '')
+        
+        meta_parts = []
+        if media_title:
+            meta_parts.append(media_title)
+        elif media_name:
+            meta_parts.append(media_name)
+        if media_artist:
+            meta_parts.append(media_artist)
+        
+        if meta_parts:
+            self.meta_lbl.setText(" · ".join(meta_parts)[:60])
+            self.meta_lbl.setVisible(True)
+            self.setFixedHeight(50)
+        else:
+            self.meta_lbl.setVisible(False)
+            self.setFixedHeight(36)
+    
+    def update_stream(self, stream):
+        self.stream = stream
+        self.name_lbl.setText(stream.get('name', '')[:30])
+        self._update_icon()
+        
+        rate = stream.get('rate', '?')
+        if rate != '?' and rate is not None:
+            r = int(rate)
+            self.rate_lbl.setText(f"{r/1000:.1f}k" if r >= 1000 else f"{r} Hz")
+        
+        self._update_metadata()
     
     def _on_slider_moved(self, value):
         self.vol_lbl.setText(f"{value}%")
@@ -422,6 +485,9 @@ class AudioTab(QWidget):
         self.selected_output = None
         self.selected_input = None
         self._prev_device_names = set()
+        self._mpris_cache = {}
+        self._mpris_cache_time = 0
+        self._desktop_names_cache = {}
         self._init_ui()
         self.refresh_devices()
         self._refresh_devices_table()
@@ -434,7 +500,6 @@ class AudioTab(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(8)
         
-        # Boutons de sous-onglets
         sub_nav_layout = QHBoxLayout()
         sub_nav_layout.setContentsMargins(0, 4, 0, 4)
         sub_nav_layout.setSpacing(1)
@@ -481,7 +546,6 @@ class AudioTab(QWidget):
         sub_nav_layout.addStretch()
         layout.addLayout(sub_nav_layout)
         
-        # Stack pour les pages
         self.sub_stack = QStackedWidget()
         
         # Page Sorties
@@ -601,7 +665,7 @@ class AudioTab(QWidget):
         
         layout.addWidget(self.sub_stack)
         
-        # Flux actifs - commun aux pages Sorties et Entrées, caché pour Périphériques
+        # Flux actifs
         self.flux_gb = QGroupBox(self.i18n.tr('flux_actifs'))
         flux_layout = QVBoxLayout()
         
@@ -614,7 +678,7 @@ class AudioTab(QWidget):
         self.streams_scroll = QScrollArea()
         self.streams_scroll.setWidgetResizable(True)
         self.streams_scroll.setWidget(self.streams_widget)
-        self.streams_scroll.setMaximumHeight(150)
+        self.streams_scroll.setMaximumHeight(200)
         self.streams_scroll.setStyleSheet("QScrollArea { border: none; }")
         flux_layout.addWidget(self.streams_scroll)
         
@@ -639,10 +703,8 @@ class AudioTab(QWidget):
         self.sub_stack.setCurrentIndex(idx)
         if idx == 2:
             self._refresh_devices_table()
-            # Cacher les flux actifs quand on est sur Périphériques
             self.flux_gb.setVisible(False)
         else:
-            # Afficher les flux actifs pour Sorties et Entrées
             self.flux_gb.setVisible(True)
     
     def _restore_header_state(self):
@@ -665,6 +727,127 @@ class AudioTab(QWidget):
             settings.sync()
         except Exception as e:
             self.logger.error(f"Erreur sauvegarde colonnes: {e}")
+    
+    def _get_mpris_players(self):
+        now = time.time()
+        if now - self._mpris_cache_time < 5:
+            return list(self._mpris_cache.keys())
+        
+        try:
+            result = subprocess.run(
+                ['dbus-send', '--session', '--print-reply',
+                 '--dest=org.freedesktop.DBus',
+                 '/org/freedesktop/DBus',
+                 'org.freedesktop.DBus.ListNames'],
+                capture_output=True, text=True, timeout=3
+            )
+            players = []
+            for line in result.stdout.split('\n'):
+                if 'org.mpris.MediaPlayer2' in line:
+                    match = re.search(r'org\.mpris\.MediaPlayer2\.([^"]+)"', line)
+                    if match:
+                        players.append(match.group(1).strip())
+            
+            self._mpris_cache = {p: True for p in players}
+            self._mpris_cache_time = now
+            return players
+        except Exception:
+            return list(self._mpris_cache.keys())
+    
+    def _get_mpris_metadata(self, player_name):
+        try:
+            result = subprocess.run(
+                ['dbus-send', '--session', '--print-reply',
+                 f'--dest=org.mpris.MediaPlayer2.{player_name}',
+                 '/org/mpris/MediaPlayer2',
+                 'org.freedesktop.DBus.Properties.Get',
+                 'string:org.mpris.MediaPlayer2.Player',
+                 'string:Metadata'],
+                capture_output=True, text=True, timeout=3
+            )
+            
+            metadata = {}
+            title_match = re.search(r'xesam:title.*?string\s+"([^"]+)"', result.stdout, re.DOTALL)
+            artist_match = re.search(r'xesam:artist.*?string\s+"([^"]+)"', result.stdout, re.DOTALL)
+            album_match = re.search(r'xesam:album.*?string\s+"([^"]+)"', result.stdout, re.DOTALL)
+            
+            if title_match:
+                metadata['media_title'] = title_match.group(1)
+            if artist_match:
+                metadata['media_artist'] = artist_match.group(1)
+            if album_match:
+                metadata['media_album'] = album_match.group(1)
+            
+            return metadata
+        except Exception:
+            return {}
+    
+    def _get_mpris_metadata_for_app(self, app_name):
+        app_lower = app_name.lower()
+        
+        players = self._get_mpris_players()
+        
+        # 1. Correspondance exacte ou partielle
+        for player in players:
+            player_lower = player.lower()
+            if app_lower in player_lower or player_lower in app_lower:
+                return self._get_mpris_metadata(player)
+        
+        # 2. Extraire la dernière partie du nom inversé
+        if '.' in app_lower:
+            binary_guess = app_lower.split('.')[-1]
+            for player in players:
+                player_lower = player.lower()
+                if binary_guess in player_lower or player_lower in binary_guess:
+                    return self._get_mpris_metadata(player)
+        
+        # 3. Nettoyer le nom
+        cleaned = re.sub(r'[\[\]]', ' ', app_lower)
+        cleaned = re.sub(r'\bpipewire\b|\balsa\b|\bplayback\b|\bcapture\b', '', cleaned)
+        cleaned = cleaned.strip()
+        
+        if cleaned and cleaned != app_lower:
+            for player in players:
+                if cleaned in player.lower():
+                    return self._get_mpris_metadata(player)
+        
+        return {}
+    
+    def _get_desktop_name(self, binary):
+        """Cherche le nom d'affichage dans les fichiers .desktop"""
+        if binary in self._desktop_names_cache:
+            return self._desktop_names_cache[binary]
+        
+        try:
+            desktop_dirs = [
+                '/usr/share/applications',
+                os.path.expanduser('~/.local/share/applications'),
+                '/var/lib/flatpak/exports/share/applications',
+                os.path.expanduser('~/.local/share/flatpak/exports/share/applications')
+            ]
+            
+            for d in desktop_dirs:
+                if not os.path.exists(d):
+                    continue
+                for f in os.listdir(d):
+                    if f.endswith('.desktop'):
+                        filepath = os.path.join(d, f)
+                        try:
+                            with open(filepath, 'r') as fh:
+                                content = fh.read()
+                                if re.search(r'^Exec=.*\b' + re.escape(binary) + r'\b', content, re.MULTILINE):
+                                    name_match = re.search(r'^Name=([^\n]+)', content, re.MULTILINE)
+                                    if name_match:
+                                        result = name_match.group(1).strip()
+                                        self._desktop_names_cache[binary] = result
+                                        return result
+                        except Exception:
+                            continue
+        except Exception:
+            pass
+        
+        self._desktop_names_cache[binary] = None
+        return None
     
     def _refresh_devices_table(self):
         selected_item = self.devices_tree.currentItem()
@@ -753,8 +936,15 @@ class AudioTab(QWidget):
                 continue
             
             app_name = props.get('application.name') or props.get('node.name', 'Inconnu')
+            binary = props.get('application.process.binary', '')
             node_id = item.get('id', 0)
             state = info.get('state', 'idle')
+            
+            # Utiliser le nom .desktop si disponible
+            if binary:
+                desktop_name = self._get_desktop_name(binary)
+                if desktop_name:
+                    app_name = desktop_name
             
             params = info.get('params', {})
             fmt = (params.get('Format', [{}]) or [{}])[0]
@@ -1116,6 +1306,7 @@ class AudioTab(QWidget):
                 continue
             
             app = props.get('application.name') or props.get('node.name', '')
+            binary = props.get('application.process.binary', '')
             if app in ('pipewire', 'WirePlumber', 'pw-dump'):
                 continue
             
@@ -1125,21 +1316,47 @@ class AudioTab(QWidget):
             enum = (info.get('params', {}).get('EnumFormat', [{}]) or [{}])[0]
             rate = enum.get('rate', '?')
             
+            # Déterminer le nom d'affichage
+            display_name = app
+            if binary:
+                desktop_name = self._get_desktop_name(binary)
+                if desktop_name:
+                    display_name = desktop_name
+                elif 'pipewire' in app.lower() or 'alsa' in app.lower():
+                    display_name = binary.capitalize()
+            
+            stream_data = {
+                'id': int(sid),
+                'name': display_name,
+                'rate': str(rate) if rate != '?' else '?',
+                'icon_name': binary if binary else app,
+                'media_title': props.get('media.title', ''),
+                'media_name': props.get('media.name', ''),
+                'media_artist': props.get('media.artist', '')
+            }
+            
+            # Si pas de métadonnées PipeWire, chercher via MPRIS
+            if not stream_data['media_title'] and not stream_data['media_artist']:
+                search_names = []
+                if binary:
+                    search_names.append(binary)
+                search_names.append(app)
+                
+                for search_name in search_names:
+                    mpris_meta = self._get_mpris_metadata_for_app(search_name)
+                    if mpris_meta:
+                        stream_data.update(mpris_meta)
+                        break
+            
             if sid in self.stream_rows:
                 row = self.stream_rows[sid]
-                row.stream = {'id': int(sid), 'name': app, 'rate': str(rate) if rate != '?' else '?'}
-                row.name_lbl.setText(app[:22])
-                rate_text = "?"
-                if rate != '?' and rate is not None:
-                    r = int(rate)
-                    rate_text = f"{r/1000:.1f}k" if r >= 1000 else f"{r} Hz"
-                row.rate_lbl.setText(rate_text)
+                row.update_stream(stream_data)
             else:
-                row = StreamRow({'id': int(sid), 'name': app, 'rate': str(rate) if rate != '?' else '?'})
+                row = StreamRow(stream_data)
                 row.volume_changed.connect(self._on_stream_volume)
                 self.stream_rows[sid] = row
                 self.streams_layout.addWidget(row)
-                self.logger.debug(f"Nouveau flux audio: {app}")
+                self.logger.debug(f"Nouveau flux audio: {display_name} (binaire: {binary})")
         
         for sid in list(self.stream_rows):
             if sid not in current_ids:
