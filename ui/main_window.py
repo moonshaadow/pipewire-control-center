@@ -18,6 +18,7 @@ from .routing_tab import RoutingTab
 from .profiles_tab import ProfilesTab
 from .status_tab import StatusTab
 from .aes67_tab import Aes67Tab
+from .fx_tab import FXTab
 from .i18n import I18n, get_system_lang
 from .logger import Logger
 
@@ -53,11 +54,13 @@ class UIConfig:
         self.default_config = {
             'visible_tabs': {
                 'output': True, 'settings': True,
-                'routing': True,
-                'profiles': True, 'aes67': True, 'status': True
+                'routing': False,
+                'profiles': True, 'aes67': True, 'status': True,
+                'fx': False
             },
             'language': 'auto',
-            'close_behavior': 'tray'
+            'close_behavior': 'tray',
+            'experimental_features': False
         }
         self.config = self._load()
     
@@ -73,6 +76,8 @@ class UIConfig:
                         config['language'] = loaded['language']
                     if 'close_behavior' in loaded:
                         config['close_behavior'] = loaded['close_behavior']
+                    if 'experimental_features' in loaded:
+                        config['experimental_features'] = loaded['experimental_features']
                     return config
             except Exception:
                 pass
@@ -99,6 +104,9 @@ class UIConfig:
     def is_tab_visible(self, tab_key):
         if tab_key == 'output':
             return True
+        # Les onglets expérimentaux nécessitent l'activation des fonctionnalités expérimentales
+        if tab_key in ('routing', 'fx'):
+            return self.config.get('experimental_features', False) and self.config['visible_tabs'].get(tab_key, False)
         return self.config['visible_tabs'].get(tab_key, True)
 
 # --- Dialog de configuration ---
@@ -109,7 +117,7 @@ class SettingsDialog(QDialog):
         self.i18n = I18n.instance()
         self.lang = self.i18n.get_lang()
         self.setWindowTitle(self.i18n.tr('settings'))
-        self.setMinimumWidth(450)
+        self.setMinimumWidth(500)
         
         layout = QVBoxLayout(self)
         
@@ -136,22 +144,48 @@ class SettingsDialog(QDialog):
             self.close_combo.setCurrentIndex(idx)
         form_layout.addRow(self.i18n.tr('close_behavior') + ':', self.close_combo)
         
+        # Fonctionnalités expérimentales
+        self.experimental_cb = QCheckBox(self.i18n.tr('enable_experimental'))
+        self.experimental_cb.setChecked(ui_config.config.get('experimental_features', False))
+        self.experimental_cb.toggled.connect(self._on_experimental_toggled)
+        form_layout.addRow('', self.experimental_cb)
+        
+        # Avertissement
+        self.experimental_warning = QLabel(self.i18n.tr('experimental_warning'))
+        self.experimental_warning.setFont(QFont("Monospace", 8))
+        self.experimental_warning.setStyleSheet("color: #ff9800;")
+        self.experimental_warning.setWordWrap(True)
+        self.experimental_warning.setVisible(ui_config.config.get('experimental_features', False))
+        form_layout.addRow('', self.experimental_warning)
+        
         # Onglets visibles
         tab_keys = [
             ('settings', 'Réglages / Settings'),
-            ('routing', 'Routing'),
+            ('routing', 'Routing (expérimental)'),
             ('profiles', 'Profils / Profiles'),
             ('aes67', 'AES67'),
-            ('status', 'État / Status')
+            ('status', 'État / Status'),
+            ('fx', 'FX (expérimental)')
         ]
         
         self.tab_checkboxes = {}
         tab_group_label = QLabel(self.i18n.tr('show_tabs') + ':')
         form_layout.addRow(tab_group_label)
         
+        experimental_enabled = ui_config.config.get('experimental_features', False)
+        
         for key, label in tab_keys:
             cb = QCheckBox(label)
-            cb.setChecked(ui_config.config['visible_tabs'].get(key, True))
+            is_experimental = key in ('routing', 'fx')
+            
+            if is_experimental:
+                cb.setChecked(ui_config.config['visible_tabs'].get(key, False))
+                cb.setEnabled(experimental_enabled)
+                cb.setStyleSheet("color: #ff9800;")
+            else:
+                cb.setChecked(ui_config.config['visible_tabs'].get(key, True))
+                cb.setEnabled(True)
+            
             self.tab_checkboxes[key] = cb
             form_layout.addRow('', cb)
         
@@ -169,11 +203,25 @@ class SettingsDialog(QDialog):
         
         layout.addWidget(button_box)
     
+    def _on_experimental_toggled(self, checked):
+        """Active/désactive les cases à cocher des onglets expérimentaux"""
+        self.experimental_warning.setVisible(checked)
+        for key in ('routing', 'fx'):
+            if key in self.tab_checkboxes:
+                self.tab_checkboxes[key].setEnabled(checked)
+                if checked:
+                    self.tab_checkboxes[key].setChecked(True)
+                else:
+                    self.tab_checkboxes[key].setChecked(False)
+    
     def _on_save(self):
         self.ui_config.config['language'] = self.lang_combo.currentData()
         self.ui_config.config['close_behavior'] = self.close_combo.currentData()
+        self.ui_config.config['experimental_features'] = self.experimental_cb.isChecked()
+        
         for key, cb in self.tab_checkboxes.items():
             self.ui_config.config['visible_tabs'][key] = cb.isChecked()
+        
         if self.ui_config.save():
             self.accept()
         else:
@@ -189,8 +237,15 @@ class SettingsDialog(QDialog):
             if self.ui_config.reset():
                 self.lang_combo.setCurrentIndex(self.lang_combo.findData('auto'))
                 self.close_combo.setCurrentIndex(self.close_combo.findData('tray'))
-                for cb in self.tab_checkboxes.values():
-                    cb.setChecked(True)
+                self.experimental_cb.setChecked(False)
+                self.experimental_warning.setVisible(False)
+                for key, cb in self.tab_checkboxes.items():
+                    if key in ('routing', 'fx'):
+                        cb.setChecked(False)
+                        cb.setEnabled(False)
+                    else:
+                        cb.setChecked(True)
+                        cb.setEnabled(True)
                 QMessageBox.information(self, 'OK', self.i18n.tr('config_reset'))
 
 # --- Fenêtre principale ---
@@ -248,7 +303,7 @@ class MainWindow(QMainWindow):
         self.buttons = []
         self.button_map = {}
         
-        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status']
+        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status', 'fx']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         
         btn_style = f"""
@@ -326,6 +381,7 @@ class MainWindow(QMainWindow):
         self.profiles_tab = ProfilesTab(self.pw, self.config_mgr)
         self.aes67_tab = Aes67Tab(self.pw)
         self.status_tab = StatusTab(self.pw)
+        self.fx_tab = FXTab(self.pw)
         
         self.all_tabs = {
             'output': self.audio_tab,
@@ -333,12 +389,14 @@ class MainWindow(QMainWindow):
             'routing': self.routing_tab,
             'profiles': self.profiles_tab,
             'aes67': self.aes67_tab,
-            'status': self.status_tab
+            'status': self.status_tab,
+            'fx': self.fx_tab
         }
         
         self._rebuild_stack()
         
-        self.buttons[0].setChecked(True)
+        if self.buttons:
+            self.buttons[0].setChecked(True)
         self.btn_group.idClicked.connect(self._on_nav)
         self.profiles_tab.profile_loaded.connect(lambda: (
             self.audio_tab.load_current(), self.settings_tab.load_current(),
@@ -362,7 +420,7 @@ class MainWindow(QMainWindow):
         settings.setValue('geometry', self.saveGeometry())
     
     def _install_shortcuts(self):
-        for i in range(1, 7):
+        for i in range(1, 8):
             shortcut = QShortcut(QKeySequence(f"Ctrl+{i}"), self)
             shortcut.activated.connect(lambda idx=i-1: self._goto_tab(idx))
         
@@ -376,7 +434,7 @@ class MainWindow(QMainWindow):
         quit_shortcut.activated.connect(self._quit_app)
     
     def _goto_tab(self, idx):
-        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status']
+        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status', 'fx']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         if idx < len(visible_keys):
             self.stack.setCurrentIndex(idx)
@@ -385,7 +443,7 @@ class MainWindow(QMainWindow):
     
     def _refresh_current_tab(self):
         current_idx = self.stack.currentIndex()
-        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status']
+        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status', 'fx']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         if current_idx < len(visible_keys):
             key = visible_keys[current_idx]
@@ -397,6 +455,8 @@ class MainWindow(QMainWindow):
                 self.settings_tab.load_current()
             elif key == 'routing':
                 self.routing_tab.refresh()
+            elif key == 'fx':
+                self.fx_tab.refresh_language()
     
     def _refresh_all(self):
         self.audio_tab.refresh_devices()
@@ -409,6 +469,7 @@ class MainWindow(QMainWindow):
         self.settings_tab.shutdown()
         self.status_tab.shutdown()
         self.aes67_tab.shutdown()
+        self.fx_tab.shutdown()
         QApplication.quit()
     
     def _rebuild_stack(self):
@@ -419,7 +480,7 @@ class MainWindow(QMainWindow):
         self.stack_tab_indices = {}
         self.tab_map = {}
         
-        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status']
+        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status', 'fx']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         
         for key in visible_keys:
@@ -439,6 +500,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(self.i18n.tr('config_saved'), 3000)
             self._rebuild_navigation()
             self._rebuild_stack()
+            self._install_shortcuts()
     
     def _rebuild_navigation(self):
         old_nav = self.centralWidget().layout().itemAt(0).widget()
@@ -468,7 +530,7 @@ class MainWindow(QMainWindow):
         self.buttons = []
         self.button_map = {}
         
-        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status']
+        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status', 'fx']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         
         btn_style = f"""
@@ -543,6 +605,7 @@ class MainWindow(QMainWindow):
             self.settings_tab.shutdown()
             self.status_tab.shutdown()
             self.aes67_tab.shutdown()
+            self.fx_tab.shutdown()
             event.accept()
             QApplication.quit()
         else:
