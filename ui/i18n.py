@@ -173,7 +173,16 @@ T = {
         'restart_btn_tooltip': 'Redémarre les services PipeWire et WirePlumber.\n\nCette action interrompt momentanément toute lecture audio.\n\nLes services seront redémarrés avec la configuration actuelle.',
 'clean_btn_tooltip': 'Supprime toutes les configurations locales de PipeWire et WirePlumber.\n\nCette action est irréversible.\n\nLes fichiers supprimés seront recréés avec les valeurs par défaut.\n\nLes services seront redémarrés automatiquement.',
         'settings': 'Réglages',
-        'audio_devices': 'Audio Devices'
+        'audio_devices': 'Audio Devices',
+        'route_to': 'Router vers',
+        'default_device': 'Périphérique par défaut',
+        'always_route': 'Toujours router',
+        'remove_routing_rule': 'Supprimer la règle de routing',
+        'routing': 'Routing',
+        'reload_wireplumber': 'Recharger WirePlumber',
+        'reload_wireplumber_tooltip': 'Redémarre WirePlumber pour appliquer les règles.\n⚠️ Interrompt brièvement l\'audio.',
+        'reload_wireplumber_confirm': 'Redémarrer WirePlumber ?\n\n⚠️ L\'audio sera brièvement interrompu.',
+        'default_device_tooltip': 'Périphérique par défaut'
     },
     'en': {
         'output': 'Audio', 'frequencies': 'Frequencies', 'buffer': 'Buffer',
@@ -344,7 +353,16 @@ T = {
         'restart_btn_tooltip': 'Restarts PipeWire and WirePlumber services.\n\nThis action briefly interrupts all audio playback.\n\nServices will be restarted with the current configuration.',
         'clean_btn_tooltip': 'Removes all local PipeWire and WirePlumber configurations.\n\nThis action is irreversible.\n\nDeleted files will be recreated with default values.\n\nServices will be restarted automatically.',
         'settings': 'Settings',
-        'audio_devices': 'Audio Devices'
+        'audio_devices': 'Audio Devices',
+        'route_to': 'Route to',
+        'default_device': 'Default device',
+        'always_route': 'Always route',
+        'remove_routing_rule': 'Remove routing rule',
+        'routing': 'Routing',
+        'reload_wireplumber': 'Reload WirePlumber',
+        'reload_wireplumber_tooltip': 'Restarts WirePlumber to apply rules.\n⚠️ Briefly interrupts audio.',
+        'reload_wireplumber_confirm': 'Restart WirePlumber?\n\n⚠️ Audio will be briefly interrupted.',
+        'default_device_tooltip': 'Default device'
     }
 }
 

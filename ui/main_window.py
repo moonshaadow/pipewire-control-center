@@ -14,6 +14,7 @@ from pipewire_manager import PipeWireManager
 from config_manager import ConfigManager
 from .audio_tab import AudioTab
 from .settings_tab import SettingsTab
+from .routing_tab import RoutingTab
 from .profiles_tab import ProfilesTab
 from .status_tab import StatusTab
 from .aes67_tab import Aes67Tab
@@ -52,6 +53,7 @@ class UIConfig:
         self.default_config = {
             'visible_tabs': {
                 'output': True, 'settings': True,
+                'routing': True,
                 'profiles': True, 'aes67': True, 'status': True
             },
             'language': 'auto',
@@ -137,6 +139,7 @@ class SettingsDialog(QDialog):
         # Onglets visibles
         tab_keys = [
             ('settings', 'Réglages / Settings'),
+            ('routing', 'Routing'),
             ('profiles', 'Profils / Profiles'),
             ('aes67', 'AES67'),
             ('status', 'État / Status')
@@ -245,7 +248,7 @@ class MainWindow(QMainWindow):
         self.buttons = []
         self.button_map = {}
         
-        all_tab_keys = ['output', 'settings', 'profiles', 'aes67', 'status']
+        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         
         btn_style = f"""
@@ -319,6 +322,7 @@ class MainWindow(QMainWindow):
         
         self.audio_tab = AudioTab(self.pw)
         self.settings_tab = SettingsTab(self.pw)
+        self.routing_tab = RoutingTab(self.pw)
         self.profiles_tab = ProfilesTab(self.pw, self.config_mgr)
         self.aes67_tab = Aes67Tab(self.pw)
         self.status_tab = StatusTab(self.pw)
@@ -326,6 +330,7 @@ class MainWindow(QMainWindow):
         self.all_tabs = {
             'output': self.audio_tab,
             'settings': self.settings_tab,
+            'routing': self.routing_tab,
             'profiles': self.profiles_tab,
             'aes67': self.aes67_tab,
             'status': self.status_tab
@@ -357,7 +362,7 @@ class MainWindow(QMainWindow):
         settings.setValue('geometry', self.saveGeometry())
     
     def _install_shortcuts(self):
-        for i in range(1, 6):
+        for i in range(1, 7):
             shortcut = QShortcut(QKeySequence(f"Ctrl+{i}"), self)
             shortcut.activated.connect(lambda idx=i-1: self._goto_tab(idx))
         
@@ -371,7 +376,7 @@ class MainWindow(QMainWindow):
         quit_shortcut.activated.connect(self._quit_app)
     
     def _goto_tab(self, idx):
-        all_tab_keys = ['output', 'settings', 'profiles', 'aes67', 'status']
+        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         if idx < len(visible_keys):
             self.stack.setCurrentIndex(idx)
@@ -380,7 +385,7 @@ class MainWindow(QMainWindow):
     
     def _refresh_current_tab(self):
         current_idx = self.stack.currentIndex()
-        all_tab_keys = ['output', 'settings', 'profiles', 'aes67', 'status']
+        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         if current_idx < len(visible_keys):
             key = visible_keys[current_idx]
@@ -390,6 +395,8 @@ class MainWindow(QMainWindow):
                 self.audio_tab.refresh_devices()
             elif key == 'settings':
                 self.settings_tab.load_current()
+            elif key == 'routing':
+                self.routing_tab.refresh()
     
     def _refresh_all(self):
         self.audio_tab.refresh_devices()
@@ -412,7 +419,7 @@ class MainWindow(QMainWindow):
         self.stack_tab_indices = {}
         self.tab_map = {}
         
-        all_tab_keys = ['output', 'settings', 'profiles', 'aes67', 'status']
+        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         
         for key in visible_keys:
@@ -461,7 +468,7 @@ class MainWindow(QMainWindow):
         self.buttons = []
         self.button_map = {}
         
-        all_tab_keys = ['output', 'settings', 'profiles', 'aes67', 'status']
+        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
         
         btn_style = f"""

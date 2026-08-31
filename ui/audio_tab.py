@@ -4,13 +4,15 @@ import os
 import subprocess
 import re
 import time
+import json
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QStackedWidget, QButtonGroup,
     QPushButton, QLabel, QMessageBox, QFrame, QScrollArea,
-    QSlider, QCheckBox, QStyle, QTreeWidget, QTreeWidgetItem, QMenu
+    QSlider, QCheckBox, QStyle, QTreeWidget, QTreeWidgetItem, QMenu,
+    QDialog
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSettings
-from PyQt6.QtGui import QFont, QPixmap, QIcon, QAction
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSettings, QPoint
+from PyQt6.QtGui import QFont, QPixmap, QIcon, QAction, QColor
 from .icon_utils import get_device_icon_path
 from .i18n import I18n
 from .logger import Logger
@@ -117,6 +119,202 @@ class DeviceCard(QFrame):
     
     def mousePressEvent(self, event):
         self.clicked.emit(self.device)
+
+
+# --- Vignette périphérique pour flux (petite) ---
+class StreamDeviceBadge(QFrame):
+    clicked = pyqtSignal()
+    
+    def __init__(self, device, parent=None):
+        super().__init__(parent)
+        self.device = device
+        self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedSize(56, 56)
+        
+        self.setToolTip(device.get('description', ''))
+        
+        layout = QVBoxLayout()
+        layout.setSpacing(1)
+        layout.setContentsMargins(3, 3, 3, 3)
+        
+        icon_path = get_device_icon_path(device)
+        self.icon_lbl = QLabel()
+        if os.path.exists(icon_path):
+            pixmap = QPixmap(icon_path)
+            pixmap = pixmap.scaled(22, 22, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.icon_lbl.setPixmap(pixmap)
+        else:
+            self.icon_lbl.setText("🔊")
+            self.icon_lbl.setFont(QFont("Monospace", 10))
+        self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.icon_lbl)
+        
+        self.name_lbl = QLabel(device.get('description', '')[:12])
+        self.name_lbl.setFont(QFont("Sans", 6, QFont.Weight.Medium))
+        self.name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.name_lbl.setWordWrap(True)
+        layout.addWidget(self.name_lbl)
+        
+        self.setLayout(layout)
+        self.setStyleSheet("""
+            StreamDeviceBadge {
+                background-color: #1565C0;
+                border: 2px solid #1E88E5;
+                border-radius: 8px;
+            }
+            StreamDeviceBadge:hover {
+                background-color: #1976D2;
+                border: 2px solid #42A5F5;
+            }
+            StreamDeviceBadge QLabel {
+                color: white;
+            }
+        """)
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+
+
+# --- Dialog de sélection de périphérique ---
+class DevicePickerDialog(QDialog):
+    """Dialog pour choisir un périphérique de sortie pour un flux"""
+    
+    def __init__(self, stream_name, current_device, available_devices, parent=None):
+        super().__init__(parent)
+        self.i18n = I18n.instance()
+        self.selected_device = None
+        self.setWindowTitle(f"Router : {stream_name}")
+        self.setMinimumWidth(400)
+        
+        layout = QVBoxLayout(self)
+        
+        title_lbl = QLabel(f"Choisir un périphérique de sortie pour :\n{stream_name}")
+        title_lbl.setFont(QFont("Sans", 11, QFont.Weight.Bold))
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_lbl.setWordWrap(True)
+        layout.addWidget(title_lbl)
+        
+        layout.addSpacing(10)
+        
+        # Grille de vignettes
+        grid_layout = QHBoxLayout()
+        grid_layout.setSpacing(8)
+        
+        # Vignette "Défaut" en premier
+        default_badge = StreamDeviceBadge({
+            'name': '',
+            'description': 'Défaut',
+            'type': 'sortie'
+        })
+        default_badge.setFixedSize(70, 70)
+        default_badge.setToolTip(self.i18n.tr('default_device_tooltip'))
+        
+        # Le flux suit le défaut si current_device est vide ou None
+        follows_default = (current_device == '' or current_device is None)
+        
+        if follows_default:
+            # Vert si le flux suit le défaut
+            default_badge.setStyleSheet("""
+                StreamDeviceBadge {
+                    background-color: #2E7D32;
+                    border: 2px solid #4CAF50;
+                    border-radius: 8px;
+                }
+                StreamDeviceBadge:hover {
+                    background-color: #388E3C;
+                    border: 2px solid #66BB6A;
+                }
+                StreamDeviceBadge QLabel {
+                    color: white;
+                }
+            """)
+        else:
+            # Sombre si le flux a un routing spécifique
+            default_badge.setStyleSheet("""
+                StreamDeviceBadge {
+                    background-color: #2a2a2a;
+                    border: 1px solid #444444;
+                    border-radius: 8px;
+                }
+                StreamDeviceBadge:hover {
+                    background-color: #333333;
+                    border: 1px solid #666666;
+                }
+                StreamDeviceBadge QLabel {
+                    color: #cccccc;
+                }
+            """)
+        default_badge.clicked.connect(self._on_default_selected)
+        grid_layout.addWidget(default_badge)
+        
+        # Trait vertical séparateur
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setStyleSheet("QFrame { color: #555; background-color: #555; }")
+        separator.setFixedWidth(1)
+        separator.setFixedHeight(70)
+        grid_layout.addWidget(separator)
+        
+        # Vignettes des périphériques
+        for device in available_devices:
+            is_current = device['name'] == current_device
+            
+            badge = StreamDeviceBadge(device)
+            badge.setFixedSize(70, 70)
+            
+            if is_current:
+                badge.setStyleSheet("""
+                    StreamDeviceBadge {
+                        background-color: #1565C0;
+                        border: 2px solid #1E88E5;
+                        border-radius: 8px;
+                    }
+                    StreamDeviceBadge:hover {
+                        background-color: #1976D2;
+                        border: 2px solid #42A5F5;
+                    }
+                    StreamDeviceBadge QLabel {
+                        color: white;
+                    }
+                """)
+            else:
+                badge.setStyleSheet("""
+                    StreamDeviceBadge {
+                        background-color: #2a2a2a;
+                        border: 1px solid #444444;
+                        border-radius: 8px;
+                    }
+                    StreamDeviceBadge:hover {
+                        background-color: #333333;
+                        border: 1px solid #666666;
+                    }
+                    StreamDeviceBadge QLabel {
+                        color: #cccccc;
+                    }
+                """)
+            
+            badge.clicked.connect(lambda checked=False, d=device: self._on_device_selected(d))
+            grid_layout.addWidget(badge)
+        
+        grid_layout.addStretch()
+        layout.addLayout(grid_layout)
+        
+        layout.addSpacing(10)
+        
+        # Bouton annuler
+        cancel_btn = QPushButton(self.i18n.tr('cancel'))
+        cancel_btn.clicked.connect(self.reject)
+        layout.addWidget(cancel_btn)
+    
+    def _on_device_selected(self, device):
+        self.selected_device = device
+        self.accept()
+    
+    def _on_default_selected(self):
+        self.selected_device = {'name': '', 'description': 'Défaut'}
+        self.accept()
 
 
 # --- Ligne device sortie + volume + infos ---
@@ -346,14 +544,19 @@ class DeviceInputRow(QWidget):
 # --- Ligne flux ---
 class StreamRow(QFrame):
     volume_changed = pyqtSignal(int, float)
+    device_change_requested = pyqtSignal(dict)
     
-    def __init__(self, stream):
+    def __init__(self, stream, pw):
         super().__init__()
         self.stream = stream
+        self.pw = pw
         self.i18n = I18n.instance()
         self.logger = Logger.instance()
+        self.device_badge = None
         self.setFrameStyle(QFrame.Shape.NoFrame)
         self.setStyleSheet("background-color: #2a2a2a; border-radius: 4px; margin: 1px 0;")
+        self.setMinimumHeight(64)
+        self.setMaximumHeight(64)
         
         layout = QHBoxLayout()
         layout.setContentsMargins(8, 4, 8, 4)
@@ -392,8 +595,8 @@ class StreamRow(QFrame):
         self.slider = ClickSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(0, 100)
         self.slider.setValue(100)
-        self.slider.setMinimumWidth(100)
-        self.slider.setMaximumWidth(800)
+        self.slider.setMinimumWidth(50)
+        self.slider.setMaximumWidth(300)
         self.slider.valueChanged.connect(self._on_slider_moved)
         self.slider.sliderReleased.connect(self._on_release)
         layout.addWidget(self.slider, 1)
@@ -438,10 +641,25 @@ class StreamRow(QFrame):
         if meta_parts:
             self.meta_lbl.setText(" · ".join(meta_parts)[:60])
             self.meta_lbl.setVisible(True)
-            self.setFixedHeight(50)
         else:
             self.meta_lbl.setVisible(False)
-            self.setFixedHeight(36)
+    
+    def set_device_badge(self, device):
+        """Ajoute ou met à jour la vignette du périphérique"""
+        if self.device_badge is None:
+            self.device_badge = StreamDeviceBadge(device)
+            self.device_badge.setFixedSize(56, 56)
+            self.device_badge.clicked.connect(lambda: self.device_change_requested.emit(self.stream))
+            self.layout().addWidget(self.device_badge)
+        else:
+            self.device_badge.device = device
+            self.device_badge.setToolTip(device.get('description', ''))
+            self.device_badge.name_lbl.setText(device.get('description', '')[:12])
+            icon_path = get_device_icon_path(device)
+            if os.path.exists(icon_path):
+                pixmap = QPixmap(icon_path)
+                pixmap = pixmap.scaled(22, 22, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                self.device_badge.icon_lbl.setPixmap(pixmap)
     
     def update_stream(self, stream):
         self.stream = stream
@@ -678,7 +896,7 @@ class AudioTab(QWidget):
         self.streams_scroll = QScrollArea()
         self.streams_scroll.setWidgetResizable(True)
         self.streams_scroll.setWidget(self.streams_widget)
-        self.streams_scroll.setMaximumHeight(200)
+        self.streams_scroll.setMaximumHeight(300)
         self.streams_scroll.setStyleSheet("QScrollArea { border: none; }")
         flux_layout.addWidget(self.streams_scroll)
         
@@ -787,13 +1005,11 @@ class AudioTab(QWidget):
         
         players = self._get_mpris_players()
         
-        # 1. Correspondance exacte ou partielle
         for player in players:
             player_lower = player.lower()
             if app_lower in player_lower or player_lower in app_lower:
                 return self._get_mpris_metadata(player)
         
-        # 2. Extraire la dernière partie du nom inversé
         if '.' in app_lower:
             binary_guess = app_lower.split('.')[-1]
             for player in players:
@@ -801,7 +1017,6 @@ class AudioTab(QWidget):
                 if binary_guess in player_lower or player_lower in binary_guess:
                     return self._get_mpris_metadata(player)
         
-        # 3. Nettoyer le nom
         cleaned = re.sub(r'[\[\]]', ' ', app_lower)
         cleaned = re.sub(r'\bpipewire\b|\balsa\b|\bplayback\b|\bcapture\b', '', cleaned)
         cleaned = cleaned.strip()
@@ -814,7 +1029,6 @@ class AudioTab(QWidget):
         return {}
     
     def _get_desktop_name(self, binary):
-        """Cherche le nom d'affichage dans les fichiers .desktop"""
         if binary in self._desktop_names_cache:
             return self._desktop_names_cache[binary]
         
@@ -940,7 +1154,6 @@ class AudioTab(QWidget):
             node_id = item.get('id', 0)
             state = info.get('state', 'idle')
             
-            # Utiliser le nom .desktop si disponible
             if binary:
                 desktop_name = self._get_desktop_name(binary)
                 if desktop_name:
@@ -1014,7 +1227,7 @@ class AudioTab(QWidget):
             elif state == 'idle':
                 app_item.setForeground(3, Qt.GlobalColor.gray)
             else:
-                app_item.setForeground(3, Qt.GlobalColor.orange)
+                app_item.setForeground(3, QColor("#ff9800"))
             
             self.apps_tree.addTopLevelItem(app_item)
             
@@ -1296,6 +1509,7 @@ class AudioTab(QWidget):
     
     def _update_streams(self, data):
         current_ids = set()
+        output_devices = {d['name']: d for d in self.pw.get_devices() if d['type'] == 'sortie'}
         
         for item in data:
             info = item.get('info', {})
@@ -1316,7 +1530,6 @@ class AudioTab(QWidget):
             enum = (info.get('params', {}).get('EnumFormat', [{}]) or [{}])[0]
             rate = enum.get('rate', '?')
             
-            # Déterminer le nom d'affichage
             display_name = app
             if binary:
                 desktop_name = self._get_desktop_name(binary)
@@ -1332,10 +1545,10 @@ class AudioTab(QWidget):
                 'icon_name': binary if binary else app,
                 'media_title': props.get('media.title', ''),
                 'media_name': props.get('media.name', ''),
-                'media_artist': props.get('media.artist', '')
+                'media_artist': props.get('media.artist', ''),
+                'binary': binary
             }
             
-            # Si pas de métadonnées PipeWire, chercher via MPRIS
             if not stream_data['media_title'] and not stream_data['media_artist']:
                 search_names = []
                 if binary:
@@ -1348,14 +1561,44 @@ class AudioTab(QWidget):
                         stream_data.update(mpris_meta)
                         break
             
+            # Déterminer si le flux suit le défaut
+            linked_device_name = props.get('target.object', '')
+            stream_data['follows_default'] = (not linked_device_name or linked_device_name == '')
+            
+            # Trouver le périphérique lié réel
+            if linked_device_name and linked_device_name in output_devices:
+                stream_data['device'] = output_devices[linked_device_name]
+            else:
+                # Pas de target.object : trouver le périphérique par défaut
+                default_sink = next((d for d in output_devices.values() if d.get('is_default')), None)
+                if default_sink:
+                    stream_data['device'] = default_sink
+                else:
+                    # Fallback : chercher via les liens
+                    for link in data:
+                        if link.get('type') == 'PipeWire:Interface:Link':
+                            link_info = link.get('info', {})
+                            if link_info.get('output-node-id') == int(sid):
+                                sink_id = link_info.get('input-node-id')
+                                for dev in output_devices.values():
+                                    if dev['id'] == sink_id:
+                                        stream_data['device'] = dev
+                                        break
+                                break
+            
             if sid in self.stream_rows:
                 row = self.stream_rows[sid]
                 row.update_stream(stream_data)
+                if 'device' in stream_data:
+                    row.set_device_badge(stream_data['device'])
             else:
-                row = StreamRow(stream_data)
+                row = StreamRow(stream_data, self.pw)
                 row.volume_changed.connect(self._on_stream_volume)
+                row.device_change_requested.connect(self._on_device_change_requested)
                 self.stream_rows[sid] = row
                 self.streams_layout.addWidget(row)
+                if 'device' in stream_data:
+                    row.set_device_badge(stream_data['device'])
                 self.logger.debug(f"Nouveau flux audio: {display_name} (binaire: {binary})")
         
         for sid in list(self.stream_rows):
@@ -1372,6 +1615,55 @@ class AudioTab(QWidget):
         
         self.empty_lbl.setVisible(not self.stream_rows)
         self.streams_scroll.setVisible(bool(self.stream_rows))
+    
+    def _on_device_change_requested(self, stream_data):
+        """Affiche le dialog de sélection de périphérique"""
+        available_devices = [d for d in self.pw.get_devices() if d['type'] == 'sortie']
+        
+        # Si le flux suit le défaut, current_device = ''
+        if stream_data.get('follows_default', False):
+            current_device = ''
+        else:
+            current_device = stream_data.get('device', {}).get('name', '')
+        
+        dialog = DevicePickerDialog(
+            stream_data.get('name', 'Flux'),
+            current_device,
+            available_devices,
+            self
+        )
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_device:
+            if dialog.selected_device['name'] == '':
+                self._route_stream_to_default(stream_data['id'])
+            else:
+                self._route_stream_now(stream_data['id'], dialog.selected_device['name'])
+    
+    def _route_stream_now(self, stream_id, device_name):
+        """Route immédiatement un flux vers un périphérique"""
+        try:
+            result = subprocess.run(
+                ['pw-metadata', str(stream_id), 'target.object', device_name],
+                capture_output=True, timeout=5
+            )
+            if result.returncode == 0:
+                self.logger.info(f"Flux {stream_id} routé vers {device_name}")
+                self.pw.invalidate_cache()
+        except Exception as e:
+            self.logger.error(f"Erreur routing flux: {e}")
+    
+    def _route_stream_to_default(self, stream_id):
+        """Retour au périphérique par défaut"""
+        try:
+            result = subprocess.run(
+                ['pw-metadata', str(stream_id), 'target.object', ''],
+                capture_output=True, timeout=5
+            )
+            if result.returncode == 0:
+                self.logger.info(f"Flux {stream_id} retour au défaut")
+                self.pw.invalidate_cache()
+        except Exception as e:
+            self.logger.error(f"Erreur retour défaut: {e}")
     
     def _on_stream_volume(self, device_id, volume):
         self.pw.set_volume(device_id, volume)
