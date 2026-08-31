@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QDialog, QDialogButtonBox, QFormLayout, QComboBox, QCheckBox,
     QLabel, QToolButton, QApplication
 )
-from PyQt6.QtGui import QPalette, QIcon, QAction, QKeySequence, QShortcut
+from PyQt6.QtGui import QPalette, QIcon, QAction, QKeySequence, QShortcut, QFont
 from PyQt6.QtCore import Qt, QSettings
 
 from pipewire_manager import PipeWireManager
