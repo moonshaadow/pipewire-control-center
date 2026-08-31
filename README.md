@@ -19,11 +19,7 @@ PipeWire Control Center (PCC) provides a clean, intuitive interface for managing
 
 ```bash
 ./install.sh
-
-## Uninstallation
-
-```bash
-./uninstall.sh
+```
 
 ## Requirements
 
@@ -33,6 +29,6 @@ PipeWire Control Center (PCC) provides a clean, intuitive interface for managing
 
     - PyQt6
 
-License
+## License
 
 MIT © 2026 A. Vartanian
