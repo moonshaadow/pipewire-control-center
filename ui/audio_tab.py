@@ -157,20 +157,6 @@ class StreamDeviceBadge(QFrame):
         layout.addWidget(self.name_lbl)
         
         self.setLayout(layout)
-        self.setStyleSheet("""
-            StreamDeviceBadge {
-                background-color: #1565C0;
-                border: 2px solid #1E88E5;
-                border-radius: 8px;
-            }
-            StreamDeviceBadge:hover {
-                background-color: #1976D2;
-                border: 2px solid #42A5F5;
-            }
-            StreamDeviceBadge QLabel {
-                color: white;
-            }
-        """)
     
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -205,7 +191,7 @@ class DevicePickerDialog(QDialog):
         # Vignette "Défaut" en premier
         default_badge = StreamDeviceBadge({
             'name': '',
-            'description': 'Défaut',
+            'description': self.i18n.tr('default_device'),
             'type': 'sortie'
         })
         default_badge.setFixedSize(70, 70)
@@ -214,35 +200,34 @@ class DevicePickerDialog(QDialog):
         # Le flux suit le défaut si current_device est vide ou None
         follows_default = (current_device == '' or current_device is None)
         
+        # Style de la vignette "Défaut"
         if follows_default:
-            # Vert si le flux suit le défaut
             default_badge.setStyleSheet("""
-                StreamDeviceBadge {
+                QFrame {
                     background-color: #2E7D32;
                     border: 2px solid #4CAF50;
                     border-radius: 8px;
                 }
-                StreamDeviceBadge:hover {
+                QFrame:hover {
                     background-color: #388E3C;
                     border: 2px solid #66BB6A;
                 }
-                StreamDeviceBadge QLabel {
+                QFrame QLabel {
                     color: white;
                 }
             """)
         else:
-            # Sombre si le flux a un routing spécifique
             default_badge.setStyleSheet("""
-                StreamDeviceBadge {
+                QFrame {
                     background-color: #2a2a2a;
                     border: 1px solid #444444;
                     border-radius: 8px;
                 }
-                StreamDeviceBadge:hover {
+                QFrame:hover {
                     background-color: #333333;
                     border: 1px solid #666666;
                 }
-                StreamDeviceBadge QLabel {
+                QFrame QLabel {
                     color: #cccccc;
                 }
             """)
@@ -266,31 +251,31 @@ class DevicePickerDialog(QDialog):
             
             if is_current:
                 badge.setStyleSheet("""
-                    StreamDeviceBadge {
+                    QFrame {
                         background-color: #1565C0;
                         border: 2px solid #1E88E5;
                         border-radius: 8px;
                     }
-                    StreamDeviceBadge:hover {
+                    QFrame:hover {
                         background-color: #1976D2;
                         border: 2px solid #42A5F5;
                     }
-                    StreamDeviceBadge QLabel {
+                    QFrame QLabel {
                         color: white;
                     }
                 """)
             else:
                 badge.setStyleSheet("""
-                    StreamDeviceBadge {
+                    QFrame {
                         background-color: #2a2a2a;
                         border: 1px solid #444444;
                         border-radius: 8px;
                     }
-                    StreamDeviceBadge:hover {
+                    QFrame:hover {
                         background-color: #333333;
                         border: 1px solid #666666;
                     }
-                    StreamDeviceBadge QLabel {
+                    QFrame QLabel {
                         color: #cccccc;
                     }
                 """)
@@ -313,7 +298,7 @@ class DevicePickerDialog(QDialog):
         self.accept()
     
     def _on_default_selected(self):
-        self.selected_device = {'name': '', 'description': 'Défaut'}
+        self.selected_device = {'name': '', 'description': self.i18n.tr('default_device')}
         self.accept()
 
 
@@ -712,7 +697,7 @@ class AudioTab(QWidget):
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._update)
-        self.timer.start(100)
+        self.timer.start(200)  # Réduit de 100ms à 200ms pour moins de charge
     
     def _init_ui(self):
         layout = QVBoxLayout()
@@ -945,6 +930,22 @@ class AudioTab(QWidget):
             settings.sync()
         except Exception as e:
             self.logger.error(f"Erreur sauvegarde colonnes: {e}")
+    
+    def _get_stream_target(self, stream_id):
+        """Récupère le target.object du flux via pw-metadata"""
+        try:
+            result = subprocess.run(
+                ['pw-metadata', str(stream_id), 'target.object'],
+                capture_output=True, text=True, timeout=3
+            )
+            if result.returncode == 0:
+                # Format: "id: <id> key: 'target.object' value: '<device_name>' type: '<type>'"
+                match = re.search(r"value:\s*'([^']*)'", result.stdout)
+                if match:
+                    return match.group(1)
+        except Exception as e:
+            self.logger.error(f"Erreur lecture target.object: {e}")
+        return ''
     
     def _get_mpris_players(self):
         now = time.time()
@@ -1561,20 +1562,31 @@ class AudioTab(QWidget):
                         stream_data.update(mpris_meta)
                         break
             
-            # Déterminer si le flux suit le défaut
-            linked_device_name = props.get('target.object', '')
+            # Récupérer le target.object du flux
+            linked_device_name = self._get_stream_target(sid)
             stream_data['follows_default'] = (not linked_device_name or linked_device_name == '')
             
             # Trouver le périphérique lié réel
-            if linked_device_name and linked_device_name in output_devices:
-                stream_data['device'] = output_devices[linked_device_name]
-            else:
+            if linked_device_name:
+                # Chercher dans les devices par nom
+                for dev in output_devices.values():
+                    if dev['name'] == linked_device_name:
+                        stream_data['device'] = dev
+                        break
+                else:
+                    # Chercher par description
+                    for dev in output_devices.values():
+                        if dev['description'] == linked_device_name:
+                            stream_data['device'] = dev
+                            break
+            
+            if 'device' not in stream_data:
                 # Pas de target.object : trouver le périphérique par défaut
                 default_sink = next((d for d in output_devices.values() if d.get('is_default')), None)
                 if default_sink:
                     stream_data['device'] = default_sink
                 else:
-                    # Fallback : chercher via les liens
+                    # Fallback : chercher via les liens PipeWire
                     for link in data:
                         if link.get('type') == 'PipeWire:Interface:Link':
                             link_info = link.get('info', {})
@@ -1620,11 +1632,8 @@ class AudioTab(QWidget):
         """Affiche le dialog de sélection de périphérique"""
         available_devices = [d for d in self.pw.get_devices() if d['type'] == 'sortie']
         
-        # Si le flux suit le défaut, current_device = ''
-        if stream_data.get('follows_default', False):
-            current_device = ''
-        else:
-            current_device = stream_data.get('device', {}).get('name', '')
+        # Récupérer le target.object actuel du flux
+        current_device = self._get_stream_target(stream_data['id'])
         
         dialog = DevicePickerDialog(
             stream_data.get('name', 'Flux'),

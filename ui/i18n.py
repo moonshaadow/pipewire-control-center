@@ -182,7 +182,7 @@ T = {
         'reload_wireplumber': 'Recharger WirePlumber',
         'reload_wireplumber_tooltip': 'Redémarre WirePlumber pour appliquer les règles.\n⚠️ Interrompt brièvement l\'audio.',
         'reload_wireplumber_confirm': 'Redémarrer WirePlumber ?\n\n⚠️ L\'audio sera brièvement interrompu.',
-        'default_device_tooltip': 'Périphérique par défaut'
+        'default_device_tooltip': 'Périphérique par défaut', 'default_device': 'Défaut'
     },
     'en': {
         'output': 'Audio', 'frequencies': 'Frequencies', 'buffer': 'Buffer',
@@ -362,7 +362,7 @@ T = {
         'reload_wireplumber': 'Reload WirePlumber',
         'reload_wireplumber_tooltip': 'Restarts WirePlumber to apply rules.\n⚠️ Briefly interrupts audio.',
         'reload_wireplumber_confirm': 'Restart WirePlumber?\n\n⚠️ Audio will be briefly interrupted.',
-        'default_device_tooltip': 'Default device'
+        'default_device_tooltip': 'Default device', 'default_device': 'Default'
     }
 }
 
