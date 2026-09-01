@@ -149,8 +149,20 @@ class StatusTab(QWidget):
             ok, msg = self.pw.restart_services()
             if ok:
                 self._log(msg, "#4CAF50", self.i18n.tr('category_audio'))
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('services_restarted'),
+                        3000
+                    )
             else:
                 self._log(msg, "#ef5350", self.i18n.tr('category_audio'))
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('services_restart_error'),
+                        3000
+                    )
     
     def _clean_all_configs(self):
         """Supprime toutes les configurations locales"""
@@ -205,10 +217,22 @@ class StatusTab(QWidget):
             self._log(self.i18n.tr('clean_errors').format(errors='\n'.join(errors)), "#ef5350", self.i18n.tr('category_general'))
         else:
             self._log(self.i18n.tr('clean_configs_success'), "#4CAF50", self.i18n.tr('category_general'))
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    self.i18n.tr('configs_cleaned'),
+                    3000
+                )
             # Redémarrer les services
             ok, msg = self.pw.restart_services()
             if ok:
                 self._log(msg, "#4CAF50", self.i18n.tr('category_audio'))
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('services_restarted'),
+                        3000
+                    )
             else:
                 self._log(msg, "#ef5350", self.i18n.tr('category_audio'))
     

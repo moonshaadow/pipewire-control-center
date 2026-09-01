@@ -383,7 +383,13 @@ class DeviceVolumeRow(QWidget):
     
     def _on_card_clicked(self, device):
         self.logger.info(f"Clic sur carte périphérique: {device.get('name', 'inconnu')}")
-        self.pw.set_default_device(device['id'])
+        if self.pw.set_default_device(device['id']):
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    self.i18n.tr('default_output_changed').format(description=device.get('description', '')),
+                    3000
+                )
     
     def _on_slider_moved(self, value):
         self.vol_label.setText(f"{value}%")
@@ -393,6 +399,15 @@ class DeviceVolumeRow(QWidget):
     def _on_release(self):
         self.logger.debug(f"Slider relâché: {self.device['name']} -> {self.slider.value()}%")
         self.volume_changed.emit(self.device['id'], self.slider.value() / 100.0)
+        main_window = self.window()
+        if main_window and hasattr(main_window, 'statusBar'):
+            main_window.statusBar().showMessage(
+                self.i18n.tr('volume_changed_status').format(
+                    name=self.device.get('description', self.device.get('name', '')),
+                    value=self.slider.value()
+                ),
+                2000
+            )
     
     def _on_boost(self, checked):
         self.logger.debug(f"Boost {self.device['name']}: {'activé' if checked else 'désactivé'}")
@@ -497,7 +512,13 @@ class DeviceInputRow(QWidget):
     
     def _on_card_clicked(self, device):
         self.logger.info(f"Clic sur carte périphérique entrée: {device.get('name', 'inconnu')}")
-        self.pw.set_default_device(device['id'])
+        if self.pw.set_default_device(device['id']):
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    self.i18n.tr('default_input_changed').format(description=device.get('description', '')),
+                    3000
+                )
     
     def _on_slider_moved(self, value):
         self.vol_label.setText(f"{value}%")
@@ -507,6 +528,15 @@ class DeviceInputRow(QWidget):
     def _on_release(self):
         self.logger.debug(f"Slider relâché: {self.device['name']} -> {self.slider.value()}%")
         self.volume_changed.emit(self.device['id'], self.slider.value() / 100.0)
+        main_window = self.window()
+        if main_window and hasattr(main_window, 'statusBar'):
+            main_window.statusBar().showMessage(
+                self.i18n.tr('volume_changed_status').format(
+                    name=self.device.get('description', self.device.get('name', '')),
+                    value=self.slider.value()
+                ),
+                2000
+            )
     
     def update_volume(self, volume):
         if not self.slider.is_dragging():
@@ -666,6 +696,15 @@ class StreamRow(QFrame):
     def _on_release(self):
         self.logger.debug(f"Slider flux relâché: {self.stream.get('name', 'inconnu')} -> {self.slider.value()}%")
         self.volume_changed.emit(self.stream.get('id', 0), self.slider.value() / 100.0)
+        main_window = self.window()
+        if main_window and hasattr(main_window, 'statusBar'):
+            main_window.statusBar().showMessage(
+                self.i18n.tr('volume_changed_status').format(
+                    name=self.stream.get('name', ''),
+                    value=self.slider.value()
+                ),
+                2000
+            )
     
     def update_volume(self, volume):
         if not self.slider.is_dragging():
@@ -697,7 +736,7 @@ class AudioTab(QWidget):
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._update)
-        self.timer.start(200)  # Réduit de 100ms à 200ms pour moins de charge
+        self.timer.start(200)
     
     def _init_ui(self):
         layout = QVBoxLayout()
@@ -939,7 +978,6 @@ class AudioTab(QWidget):
                 capture_output=True, text=True, timeout=3
             )
             if result.returncode == 0:
-                # Format: "id: <id> key: 'target.object' value: '<device_name>' type: '<type>'"
                 match = re.search(r"value:\s*'([^']*)'", result.stdout)
                 if match:
                     return match.group(1)
@@ -1268,7 +1306,12 @@ class AudioTab(QWidget):
             if ok:
                 self.pw.invalidate_cache()
                 self._refresh_devices_table()
-                QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('node_destroyed'))
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('node_destroyed_status').format(id=node_id),
+                        3000
+                    )
             else:
                 QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('node_destroy_error') + f"\n{err}")
     
@@ -1281,7 +1324,12 @@ class AudioTab(QWidget):
         dev_id = int(item.text(0).replace(" ★", ""))
         if self.pw.set_default_device(dev_id):
             self._refresh_devices_table()
-            QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('device_default_changed'))
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    self.i18n.tr('default_device_changed_status').format(description=item.text(1)),
+                    3000
+                )
         else:
             QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('device_default_error'))
     
@@ -1322,7 +1370,12 @@ class AudioTab(QWidget):
             if ok:
                 self.pw.invalidate_cache()
                 self._refresh_devices_table()
-                QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('node_destroyed'))
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('node_destroyed_status').format(id=dev_id),
+                        3000
+                    )
             else:
                 QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('node_destroy_error') + f"\n{err}")
     
@@ -1568,25 +1621,21 @@ class AudioTab(QWidget):
             
             # Trouver le périphérique lié réel
             if linked_device_name:
-                # Chercher dans les devices par nom
                 for dev in output_devices.values():
                     if dev['name'] == linked_device_name:
                         stream_data['device'] = dev
                         break
                 else:
-                    # Chercher par description
                     for dev in output_devices.values():
                         if dev['description'] == linked_device_name:
                             stream_data['device'] = dev
                             break
             
             if 'device' not in stream_data:
-                # Pas de target.object : trouver le périphérique par défaut
                 default_sink = next((d for d in output_devices.values() if d.get('is_default')), None)
                 if default_sink:
                     stream_data['device'] = default_sink
                 else:
-                    # Fallback : chercher via les liens PipeWire
                     for link in data:
                         if link.get('type') == 'PipeWire:Interface:Link':
                             link_info = link.get('info', {})
@@ -1632,7 +1681,6 @@ class AudioTab(QWidget):
         """Affiche le dialog de sélection de périphérique"""
         available_devices = [d for d in self.pw.get_devices() if d['type'] == 'sortie']
         
-        # Récupérer le target.object actuel du flux
         current_device = self._get_stream_target(stream_data['id'])
         
         dialog = DevicePickerDialog(
@@ -1658,6 +1706,23 @@ class AudioTab(QWidget):
             if result.returncode == 0:
                 self.logger.info(f"Flux {stream_id} routé vers {device_name}")
                 self.pw.invalidate_cache()
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    stream_name = self.stream_rows.get(str(stream_id), None)
+                    stream_display = stream_name.stream.get('name', str(stream_id)) if stream_name else str(stream_id)
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('stream_routed').format(stream=stream_display, device=device_name),
+                        3000
+                    )
+            else:
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    stream_name = self.stream_rows.get(str(stream_id), None)
+                    stream_display = stream_name.stream.get('name', str(stream_id)) if stream_name else str(stream_id)
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('stream_route_error').format(stream=stream_display),
+                        3000
+                    )
         except Exception as e:
             self.logger.error(f"Erreur routing flux: {e}")
     
@@ -1671,6 +1736,14 @@ class AudioTab(QWidget):
             if result.returncode == 0:
                 self.logger.info(f"Flux {stream_id} retour au défaut")
                 self.pw.invalidate_cache()
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    stream_name = self.stream_rows.get(str(stream_id), None)
+                    stream_display = stream_name.stream.get('name', str(stream_id)) if stream_name else str(stream_id)
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('stream_routed_default').format(stream=stream_display),
+                        3000
+                    )
         except Exception as e:
             self.logger.error(f"Erreur retour défaut: {e}")
     

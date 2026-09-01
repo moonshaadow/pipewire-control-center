@@ -134,7 +134,12 @@ class RoutingTab(QWidget):
             # Ajouter la règle
             if self._write_rule(app_binary, target_device):
                 self.refresh()
-                QMessageBox.information(self, self.i18n.tr('success'), 'Règle créée')
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('routing_rule_added').format(app=app_binary, device=target_device),
+                        3000
+                    )
     
     def _write_rule(self, app_binary, target_device):
         """Écrit une règle dans le fichier Lua"""
@@ -213,6 +218,12 @@ rule = {{
         if reply == QMessageBox.StandardButton.Yes:
             self._delete_rule(app_binary)
             self.refresh()
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    self.i18n.tr('routing_rule_removed').format(app=app_binary),
+                    3000
+                )
     
     def _reload_wireplumber(self):
         """Redémarre WirePlumber"""
@@ -233,7 +244,12 @@ rule = {{
             )
             if result.returncode == 0:
                 self.logger.info("WirePlumber redémarré")
-                QMessageBox.information(self, self.i18n.tr('success'), 'WirePlumber redémarré')
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('wireplumber_reloaded'),
+                        3000
+                    )
             else:
                 self.logger.error(f"Échec redémarrage WirePlumber: {result.stderr}")
                 QMessageBox.warning(self, 'Erreur', 'Échec du redémarrage')

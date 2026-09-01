@@ -457,11 +457,12 @@ class MainWindow(QMainWindow):
                 self.routing_tab.refresh()
             elif key == 'fx':
                 self.fx_tab.refresh_language()
+            self.statusBar().showMessage(self.i18n.tr('refreshed'), 2000)
     
     def _refresh_all(self):
         self.audio_tab.refresh_devices()
         self.status_tab.refresh()
-        self.statusBar().showMessage(self.i18n.tr('rafraichir'), 2000)
+        self.statusBar().showMessage(self.i18n.tr('full_refresh'), 2000)
     
     def _quit_app(self):
         self._save_geometry()
@@ -497,7 +498,7 @@ class MainWindow(QMainWindow):
             self.i18n.set_lang(self.ui_config.config['language'])
             self.lang = self.i18n.get_lang()
             self.setWindowTitle(self.i18n.tr('title'))
-            self.statusBar().showMessage(self.i18n.tr('config_saved'), 3000)
+            self.statusBar().showMessage(self.i18n.tr('ui_config_saved'), 3000)
             self._rebuild_navigation()
             self._rebuild_stack()
             self._install_shortcuts()

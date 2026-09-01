@@ -292,6 +292,13 @@ class SettingsTab(QWidget):
         
         if self.pw.write_allowed_rates(rates):
             self.logger.info(f"Fréquences sauvegardées: {rates}")
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                rates_str = ', '.join(str(r) for r in rates)
+                main_window.statusBar().showMessage(
+                    self.i18n.tr('frequencies_saved').format(rates=rates_str),
+                    3000
+                )
             
             reply = QMessageBox.question(
                 self,
@@ -304,7 +311,12 @@ class SettingsTab(QWidget):
             if reply == QMessageBox.StandardButton.Yes:
                 ok, msg = self.pw.restart_services()
                 if ok:
-                    QMessageBox.information(self, self.i18n.tr('success'), msg)
+                    main_window = self.window()
+                    if main_window and hasattr(main_window, 'statusBar'):
+                        main_window.statusBar().showMessage(
+                            self.i18n.tr('services_restarted'),
+                            3000
+                        )
                 else:
                     QMessageBox.warning(self, self.i18n.tr('error_title'), msg)
         else:
@@ -321,7 +333,12 @@ class SettingsTab(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             if self.pw.remove_config():
                 self._populate_rates_list()
-                QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('config_removed'))
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('frequency_config_removed'),
+                        3000
+                    )
             else:
                 QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('config_error'))
     
@@ -421,7 +438,12 @@ class SettingsTab(QWidget):
         if ok:
             self.current_buf_lbl.setText(self.i18n.tr('buffer_actuel').format(quantum))
             self.logger.info(f"Buffer appliqué: quantum={quantum}, min={min_q}, max={max_q}")
-            QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('buffer_applied'))
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    self.i18n.tr('buffer_applied_status').format(quantum=quantum),
+                    3000
+                )
         else:
             self.logger.error("Échec de l'application du buffer")
             QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('buffer_apply_error'))

@@ -68,7 +68,12 @@ class ProfilesTab(QWidget):
             }
             if self.config_mgr.save(name, config):
                 self._refresh_list()
-                QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('profile_saved').format(name=name))
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('profile_saved_status').format(name=name),
+                        3000
+                    )
             else:
                 QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('config_error'))
     
@@ -86,7 +91,12 @@ class ProfilesTab(QWidget):
             self.pw.set_min_quantum(config.get('min_quantum', 32))
             self.pw.set_max_quantum(config.get('max_quantum', 8192))
             self.profile_loaded.emit()
-            QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('profile_loaded_msg'))
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    self.i18n.tr('profile_loaded_status').format(name=item.text()),
+                    3000
+                )
         else:
             QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('select_profile'))
     
@@ -102,8 +112,15 @@ class ProfilesTab(QWidget):
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            self.config_mgr.delete(item.text())
+            profile_name = item.text()
+            self.config_mgr.delete(profile_name)
             self._refresh_list()
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    self.i18n.tr('profile_deleted_status').format(name=profile_name),
+                    3000
+                )
     
     def refresh_language(self):
         self.save_btn.setText(self.i18n.tr('sauvegarder_etat'))

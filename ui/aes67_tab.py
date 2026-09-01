@@ -328,14 +328,30 @@ WantedBy=default.target
         
         try:
             result = subprocess.run(['systemctl', '--user', 'start', 'ptp4l'], capture_output=True)
-            return result.returncode == 0
+            if result.returncode == 0:
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('ptp_started'),
+                        3000
+                    )
+                return True
+            return False
         except Exception:
             return False
     
     def _stop_ptp(self):
         try:
             result = subprocess.run(['systemctl', '--user', 'stop', 'ptp4l'], capture_output=True)
-            return result.returncode == 0
+            if result.returncode == 0:
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('ptp_stopped'),
+                        3000
+                    )
+                return True
+            return False
         except Exception:
             return False
     
@@ -391,7 +407,12 @@ WantedBy=default.target
         
         ok, msg = self.pw.restart_services()
         if ok:
-            QMessageBox.information(self, self.i18n.tr('success'), self.i18n.tr('aes67_enabled'))
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    self.i18n.tr('aes67_enabled_status'),
+                    3000
+                )
         else:
             QMessageBox.warning(self, self.i18n.tr('error_title'), f"{self.i18n.tr('restart_error')} : {msg}")
         
@@ -417,7 +438,14 @@ WantedBy=default.target
             self._stop_ptp()
         
         ok, msg = self.pw.restart_services()
-        if not ok:
+        if ok:
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                main_window.statusBar().showMessage(
+                    self.i18n.tr('aes67_config_removed_status'),
+                    3000
+                )
+        else:
             QMessageBox.warning(self, self.i18n.tr('error_title'), f"{self.i18n.tr('restart_error')} : {msg}")
         
         self._update_status()
