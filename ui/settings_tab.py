@@ -290,35 +290,42 @@ class SettingsTab(QWidget):
             QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('list_empty'))
             return
         
+        # 1. Écrire le fichier persistant
         if self.pw.write_allowed_rates(rates):
-            self.logger.info(f"Fréquences sauvegardées: {rates}")
-            main_window = self.window()
-            if main_window and hasattr(main_window, 'statusBar'):
-                rates_str = ', '.join(str(r) for r in rates)
-                main_window.statusBar().showMessage(
-                    self.i18n.tr('frequencies_saved').format(rates=rates_str),
-                    3000
+            # 2. Appliquer immédiatement via métadonnées (sans redémarrage)
+            if self.pw.apply_allowed_rates(rates):
+                self.logger.info(f"Fréquences sauvegardées et appliquées: {rates}")
+                main_window = self.window()
+                if main_window and hasattr(main_window, 'statusBar'):
+                    rates_str = ', '.join(str(r) for r in rates)
+                    main_window.statusBar().showMessage(
+                        self.i18n.tr('frequencies_saved').format(rates=rates_str),
+                        3000
+                    )
+                # Pas besoin de redémarrer
+                return
+            else:
+                # Fallback : redémarrage si l'application immédiate échoue
+                self.logger.warning("Application immédiate échouée, redémarrage nécessaire")
+                reply = QMessageBox.question(
+                    self,
+                    self.i18n.tr('success'),
+                    self.i18n.tr('config_saved_restart'),
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
                 )
-            
-            reply = QMessageBox.question(
-                self,
-                self.i18n.tr('success'),
-                self.i18n.tr('config_saved_restart'),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes
-            )
-            
-            if reply == QMessageBox.StandardButton.Yes:
-                ok, msg = self.pw.restart_services()
-                if ok:
-                    main_window = self.window()
-                    if main_window and hasattr(main_window, 'statusBar'):
-                        main_window.statusBar().showMessage(
-                            self.i18n.tr('services_restarted'),
-                            3000
-                        )
-                else:
-                    QMessageBox.warning(self, self.i18n.tr('error_title'), msg)
+                
+                if reply == QMessageBox.StandardButton.Yes:
+                    ok, msg = self.pw.restart_services()
+                    if ok:
+                        main_window = self.window()
+                        if main_window and hasattr(main_window, 'statusBar'):
+                            main_window.statusBar().showMessage(
+                                self.i18n.tr('services_restarted'),
+                                3000
+                            )
+                    else:
+                        QMessageBox.warning(self, self.i18n.tr('error_title'), msg)
         else:
             self.logger.error("Échec écriture fréquences")
             QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('config_error'))

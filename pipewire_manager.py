@@ -230,6 +230,7 @@ class PipeWireManager:
         return None
     
     def write_allowed_rates(self, rates: List[int]) -> bool:
+        """Écrit le fichier de configuration (persistant)"""
         self.config_file.parent.mkdir(parents=True, exist_ok=True)
         rates_str = ' '.join(str(r) for r in sorted(rates))
         try:
@@ -243,6 +244,12 @@ class PipeWireManager:
         except Exception as e:
             self.logger.error(f"Erreur écriture fréquences: {e}")
             return False
+    
+    def apply_allowed_rates(self, rates: List[int]) -> bool:
+        """Applique les fréquences autorisées via métadonnées (immédiat, sans redémarrage)"""
+        rates_str = ','.join(str(r) for r in sorted(rates))
+        self.logger.info(f"Application immédiate des fréquences: {rates_str}")
+        return self._set_metadata('default.clock.allowed-rates', rates_str)
     
     def remove_config(self) -> bool:
         try:
@@ -259,17 +266,109 @@ class PipeWireManager:
         ok, _, err = self._run(['pw-cli', 'destroy', str(node_id)])
         return ok, err
     
+    def _save_volumes(self) -> Dict[int, float]:
+        """Sauvegarde les volumes actuels des périphériques"""
+        volumes = {}
+        try:
+            devices = self.get_devices()
+            for device in devices:
+                vol = self.get_volume(device['id'])
+                if vol is not None:
+                    volumes[device['id']] = vol
+                    self.logger.debug(f"Volume sauvegardé: {device['name']} -> {vol:.2f}")
+        except Exception as e:
+            self.logger.warning(f"Erreur sauvegarde volumes: {e}")
+        return volumes
+    
+    def _wait_for_devices(self, timeout: float = 5.0) -> bool:
+        """Attend que les périphériques réapparaissent après redémarrage (polling)"""
+        self.logger.info("Attente des périphériques...")
+        start = time.time()
+        
+        while time.time() - start < timeout:
+            try:
+                self.invalidate_cache()
+                devices = self.get_devices()
+                if len(devices) > 0:
+                    self.logger.info(f"Périphériques détectés: {len(devices)}")
+                    return True
+            except Exception as e:
+                self.logger.debug(f"Erreur détection périphériques: {e}")
+            
+            time.sleep(0.5)
+        
+        self.logger.warning(f"Timeout ({timeout}s): périphériques non détectés")
+        return False
+    
+    def _restore_volumes(self, volumes: Dict[int, float]):
+        """Restaure les volumes après redémarrage avec polling"""
+        if not volumes:
+            return
+        
+        if not self._wait_for_devices(timeout=5.0):
+            self.logger.warning("Impossible de restaurer les volumes : périphériques non détectés")
+            return
+        
+        try:
+            devices = self.get_devices()
+            restored = 0
+            for device in devices:
+                if device['id'] in volumes:
+                    vol = volumes[device['id']]
+                    if self.set_volume(device['id'], vol):
+                        restored += 1
+                        self.logger.info(f"Volume restauré: {device['name']} -> {vol:.2f}")
+            
+            self.logger.info(f"Volumes restaurés: {restored}/{len(volumes)}")
+        except Exception as e:
+            self.logger.warning(f"Erreur restauration volumes: {e}")
+    
     def restart_services(self) -> Tuple[bool, str]:
-        self.logger.info("Redémarrage des services PipeWire + WirePlumber")
-        ok, out, err = self._run(
-            ['systemctl', '--user', 'restart', 'pipewire', 'wireplumber'],
+        """Redémarrage doux : WirePlumber arrêté d'abord, socket PipeWire préservé, volumes restaurés"""
+        self.logger.info("Redémarrage doux des services PipeWire + WirePlumber")
+        
+        # 1. Sauvegarder les volumes
+        volumes = self._save_volumes()
+        self.logger.info(f"Volumes sauvegardés: {len(volumes)}")
+        
+        # 2. Arrêter WirePlumber d'abord
+        self.logger.info("Arrêt de WirePlumber...")
+        ok_wp_stop, _, err_wp_stop = self._run(
+            ['systemctl', '--user', 'stop', 'wireplumber'],
+            timeout=5
+        )
+        if not ok_wp_stop:
+            self.logger.warning(f"Erreur arrêt WirePlumber: {err_wp_stop}")
+        
+        # 3. Redémarrer PipeWire SANS toucher au socket
+        self.logger.info("Redémarrage de PipeWire (socket préservé)...")
+        ok_pw, _, err_pw = self._run(
+            ['systemctl', '--user', 'restart', 'pipewire.service'],
             timeout=10
         )
-        if ok:
+        
+        # 4. Redémarrer WirePlumber
+        self.logger.info("Redémarrage de WirePlumber...")
+        ok_wp_start, _, err_wp_start = self._run(
+            ['systemctl', '--user', 'start', 'wireplumber'],
+            timeout=10
+        )
+        
+        # 5. Invalider le cache
+        self.invalidate_cache()
+        
+        # 6. Restaurer les volumes avec polling
+        if volumes:
+            self.logger.info(f"Restauration de {len(volumes)} volumes...")
+            self._restore_volumes(volumes)
+        
+        if ok_pw and ok_wp_start:
             self.logger.info("Services redémarrés avec succès")
+            return True, "Services redémarrés"
         else:
-            self.logger.error(f"Erreur redémarrage services: {err or out}")
-        return (True, "Services redémarrés") if ok else (False, err or out or "Erreur")
+            error_msg = err_pw or err_wp_start or "Erreur inconnue"
+            self.logger.error(f"Erreur redémarrage services: {error_msg}")
+            return False, error_msg
     
     def get_version(self) -> str:
         ok, out, _ = self._run(['pipewire', '--version'])
