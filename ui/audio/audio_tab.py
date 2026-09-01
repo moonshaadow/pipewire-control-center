@@ -1,734 +1,40 @@
 #!/usr/bin/env python3
-"""Onglet Audio : sorties, entrées et périphériques"""
+"""Onglet Audio principal"""
 import os
 import subprocess
 import re
 import time
-import json
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QStackedWidget, QButtonGroup,
-    QPushButton, QLabel, QMessageBox, QFrame, QScrollArea,
-    QSlider, QCheckBox, QStyle, QTreeWidget, QTreeWidgetItem, QMenu,
-    QDialog
+    QPushButton, QLabel, QMessageBox, QScrollArea,
+    QCheckBox, QTreeWidget, QTreeWidgetItem, QMenu, QDialog
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSettings, QPoint
-from PyQt6.QtGui import QFont, QPixmap, QIcon, QAction, QColor
-from .icon_utils import get_device_icon_path
-from .i18n import I18n
-from .logger import Logger
-
-# --- Sliders ---
-class ClickSlider(QSlider):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._click_dragging = False
-    
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._click_dragging = True
-            self.setValue(QStyle.sliderValueFromPosition(
-                self.minimum(), self.maximum(),
-                int(event.position().x()) if hasattr(event, 'position') else event.x(),
-                self.width()
-            ))
-        super().mousePressEvent(event)
-    
-    def mouseReleaseEvent(self, event):
-        self._click_dragging = False
-        super().mouseReleaseEvent(event)
-    
-    def is_dragging(self):
-        return self._click_dragging or self.isSliderDown()
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSettings
+from PyQt6.QtGui import QFont, QIcon, QAction, QColor
+from .device_row import DeviceRow
+from .stream_row import StreamRow
+from .device_picker import DevicePickerDialog
+from .mpris import MprisHelper
+from ..icon_utils import get_device_icon_path
+from ..i18n import I18n
+from ..logger import Logger
 
 
-# --- Cartes device ---
-class DeviceCard(QFrame):
-    clicked = pyqtSignal(dict)
-    
-    def __init__(self, device, is_selected=False):
-        super().__init__()
-        self.device = device
-        self.i18n = I18n.instance()
-        self.logger = Logger.instance()
-        self.setProperty("selected", is_selected)
-        self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumSize(150, 85)
-        self.setMaximumSize(200, 95)
-        
-        layout = QVBoxLayout()
-        layout.setSpacing(4)
-        layout.setContentsMargins(10, 8, 10, 8)
-        
-        icon_path = get_device_icon_path(device)
-        self.icon_lbl = QLabel()
-        if os.path.exists(icon_path):
-            pixmap = QPixmap(icon_path)
-            pixmap = pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            self.icon_lbl.setPixmap(pixmap)
-        else:
-            self.icon_lbl.setText("🔊")
-            self.icon_lbl.setFont(QFont("Monospace", 20))
-        self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.icon_lbl)
-        
-        self.name_lbl = QLabel(device.get('description', 'Inconnu')[:40])
-        self.name_lbl.setFont(QFont("Monospace", 7))
-        self.name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.name_lbl.setWordWrap(True)
-        self.name_lbl.setMaximumWidth(180)
-        layout.addWidget(self.name_lbl)
-        
-        if device.get('state') == 'running':
-            badge = QLabel("● " + self.i18n.tr('active'))
-            badge.setFont(QFont("Monospace", 6))
-            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            badge.setStyleSheet("color: #4CAF50;")
-            layout.addWidget(badge)
-        
-        self.setLayout(layout)
-        self.setStyleSheet("""
-            DeviceCard[selected="true"] {
-                background-color: #1565C0;
-                border: 2px solid #1E88E5;
-                border-radius: 8px;
-            }
-            DeviceCard[selected="true"] QLabel {
-                color: white;
-            }
-            DeviceCard[selected="false"] {
-                background-color: #2a2a2a;
-                border: 1px solid #444444;
-                border-radius: 8px;
-            }
-            DeviceCard[selected="false"] QLabel {
-                color: #cccccc;
-            }
-            DeviceCard[selected="false"]:hover {
-                background-color: #333333;
-                border: 1px solid #666666;
-            }
-        """)
-    
-    def set_selected(self, selected):
-        self.is_selected = selected
-        self.setProperty("selected", selected)
-        self.style().unpolish(self)
-        self.style().polish(self)
-        self.update()
-    
-    def mousePressEvent(self, event):
-        self.clicked.emit(self.device)
-
-
-# --- Vignette périphérique pour flux (petite) ---
-class StreamDeviceBadge(QFrame):
-    clicked = pyqtSignal()
-    
-    def __init__(self, device, parent=None):
-        super().__init__(parent)
-        self.device = device
-        self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedSize(56, 56)
-        
-        self.setToolTip(device.get('description', ''))
-        
-        layout = QVBoxLayout()
-        layout.setSpacing(1)
-        layout.setContentsMargins(3, 3, 3, 3)
-        
-        icon_path = get_device_icon_path(device)
-        self.icon_lbl = QLabel()
-        if os.path.exists(icon_path):
-            pixmap = QPixmap(icon_path)
-            pixmap = pixmap.scaled(22, 22, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            self.icon_lbl.setPixmap(pixmap)
-        else:
-            self.icon_lbl.setText("🔊")
-            self.icon_lbl.setFont(QFont("Monospace", 10))
-        self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.icon_lbl)
-        
-        self.name_lbl = QLabel(device.get('description', '')[:12])
-        self.name_lbl.setFont(QFont("Sans", 6, QFont.Weight.Medium))
-        self.name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.name_lbl.setWordWrap(True)
-        layout.addWidget(self.name_lbl)
-        
-        self.setLayout(layout)
-    
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit()
-
-
-# --- Dialog de sélection de périphérique ---
-class DevicePickerDialog(QDialog):
-    """Dialog pour choisir un périphérique de sortie pour un flux"""
-    
-    def __init__(self, stream_name, current_device, available_devices, parent=None):
-        super().__init__(parent)
-        self.i18n = I18n.instance()
-        self.selected_device = None
-        self.setWindowTitle(f"Router : {stream_name}")
-        self.setMinimumWidth(400)
-        
-        layout = QVBoxLayout(self)
-        
-        title_lbl = QLabel(f"Choisir un périphérique de sortie pour :\n{stream_name}")
-        title_lbl.setFont(QFont("Sans", 11, QFont.Weight.Bold))
-        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_lbl.setWordWrap(True)
-        layout.addWidget(title_lbl)
-        
-        layout.addSpacing(10)
-        
-        # Grille de vignettes
-        grid_layout = QHBoxLayout()
-        grid_layout.setSpacing(8)
-        
-        # Vignette "Défaut" en premier
-        default_badge = StreamDeviceBadge({
-            'name': '',
-            'description': self.i18n.tr('default_device'),
-            'type': 'sortie'
-        })
-        default_badge.setFixedSize(70, 70)
-        default_badge.setToolTip(self.i18n.tr('default_device_tooltip'))
-        
-        # Le flux suit le défaut si current_device est vide ou None
-        follows_default = (current_device == '' or current_device is None)
-        
-        # Style de la vignette "Défaut"
-        if follows_default:
-            default_badge.setStyleSheet("""
-                QFrame {
-                    background-color: #2E7D32;
-                    border: 2px solid #4CAF50;
-                    border-radius: 8px;
-                }
-                QFrame:hover {
-                    background-color: #388E3C;
-                    border: 2px solid #66BB6A;
-                }
-                QFrame QLabel {
-                    color: white;
-                }
-            """)
-        else:
-            default_badge.setStyleSheet("""
-                QFrame {
-                    background-color: #2a2a2a;
-                    border: 1px solid #444444;
-                    border-radius: 8px;
-                }
-                QFrame:hover {
-                    background-color: #333333;
-                    border: 1px solid #666666;
-                }
-                QFrame QLabel {
-                    color: #cccccc;
-                }
-            """)
-        default_badge.clicked.connect(self._on_default_selected)
-        grid_layout.addWidget(default_badge)
-        
-        # Trait vertical séparateur
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.VLine)
-        separator.setStyleSheet("QFrame { color: #555; background-color: #555; }")
-        separator.setFixedWidth(1)
-        separator.setFixedHeight(70)
-        grid_layout.addWidget(separator)
-        
-        # Vignettes des périphériques
-        for device in available_devices:
-            is_current = device['name'] == current_device
-            
-            badge = StreamDeviceBadge(device)
-            badge.setFixedSize(70, 70)
-            
-            if is_current:
-                badge.setStyleSheet("""
-                    QFrame {
-                        background-color: #1565C0;
-                        border: 2px solid #1E88E5;
-                        border-radius: 8px;
-                    }
-                    QFrame:hover {
-                        background-color: #1976D2;
-                        border: 2px solid #42A5F5;
-                    }
-                    QFrame QLabel {
-                        color: white;
-                    }
-                """)
-            else:
-                badge.setStyleSheet("""
-                    QFrame {
-                        background-color: #2a2a2a;
-                        border: 1px solid #444444;
-                        border-radius: 8px;
-                    }
-                    QFrame:hover {
-                        background-color: #333333;
-                        border: 1px solid #666666;
-                    }
-                    QFrame QLabel {
-                        color: #cccccc;
-                    }
-                """)
-            
-            badge.clicked.connect(lambda checked=False, d=device: self._on_device_selected(d))
-            grid_layout.addWidget(badge)
-        
-        grid_layout.addStretch()
-        layout.addLayout(grid_layout)
-        
-        layout.addSpacing(10)
-        
-        # Bouton annuler
-        cancel_btn = QPushButton(self.i18n.tr('cancel'))
-        cancel_btn.clicked.connect(self.reject)
-        layout.addWidget(cancel_btn)
-    
-    def _on_device_selected(self, device):
-        self.selected_device = device
-        self.accept()
-    
-    def _on_default_selected(self):
-        self.selected_device = {'name': '', 'description': self.i18n.tr('default_device')}
-        self.accept()
-
-
-# --- Ligne device sortie + volume + infos ---
-class DeviceVolumeRow(QWidget):
-    volume_changed = pyqtSignal(int, float)
-    
-    def __init__(self, device, pw):
-        super().__init__()
-        self.device = device
-        self.pw = pw
-        self.i18n = I18n.instance()
-        self.logger = Logger.instance()
-        self._init_ui()
-    
-    def _init_ui(self):
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 4, 0, 4)
-        layout.setSpacing(30)
-        
-        self.card = DeviceCard(self.device, self.device.get('is_default', False))
-        self.card.clicked.connect(self._on_card_clicked)
-        layout.addWidget(self.card)
-        
-        vol_layout = QVBoxLayout()
-        vol_layout.setSpacing(2)
-        
-        vol_top = QHBoxLayout()
-        vol_top.setSpacing(30)
-        
-        self.slider = ClickSlider(Qt.Orientation.Horizontal)
-        self.slider.setRange(0, 100)
-        self.slider.setValue(100)
-        self.slider.setMinimumWidth(100)
-        self.slider.setMaximumWidth(800)
-        self.slider.valueChanged.connect(self._on_slider_moved)
-        self.slider.sliderReleased.connect(self._on_release)
-        self.slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                height: 4px; background: #444; border-radius: 2px;
-            }
-            QSlider::handle:horizontal {
-                width: 10px; height: 10px; margin: -3px 0;
-                background: #fff; border-radius: 5px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #4CAF50; border-radius: 2px;
-            }
-        """)
-        vol_top.addWidget(self.slider, 1)
-        
-        self.vol_label = QLabel("100%")
-        self.vol_label.setFont(QFont("Monospace", 9))
-        self.vol_label.setStyleSheet("color: white;")
-        self.vol_label.setFixedWidth(40)
-        self.vol_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        vol_top.addWidget(self.vol_label)
-        
-        vol_layout.addLayout(vol_top)
-        
-        info_layout = QHBoxLayout()
-        info_layout.setSpacing(0)
-        info_layout.setContentsMargins(30, 0, 0, 0)
-        self.info_lbl = QLabel("48000 Hz / S32LE")
-        self.info_lbl.setFont(QFont("Monospace", 8))
-        self.info_lbl.setStyleSheet("color: #aaa;")
-        info_layout.addWidget(self.info_lbl)
-        info_layout.addStretch()
-        vol_layout.addLayout(info_layout)
-        
-        boost_layout = QHBoxLayout()
-        boost_layout.addStretch()
-        self.boost_cb = QCheckBox(self.i18n.tr('boost_150'))
-        self.boost_cb.setFont(QFont("Monospace", 7))
-        self.boost_cb.setStyleSheet("color: #888;")
-        self.boost_cb.toggled.connect(self._on_boost)
-        boost_layout.addWidget(self.boost_cb)
-        vol_layout.addLayout(boost_layout)
-        
-        layout.addLayout(vol_layout, 1)
-        self.setLayout(layout)
-    
-    def _on_card_clicked(self, device):
-        self.logger.info(f"Clic sur carte périphérique: {device.get('name', 'inconnu')}")
-        if self.pw.set_default_device(device['id']):
-            main_window = self.window()
-            if main_window and hasattr(main_window, 'statusBar'):
-                main_window.statusBar().showMessage(
-                    self.i18n.tr('default_output_changed').format(description=device.get('description', '')),
-                    3000
-                )
-    
-    def _on_slider_moved(self, value):
-        self.vol_label.setText(f"{value}%")
-        if self.slider.is_dragging():
-            self.volume_changed.emit(self.device['id'], value / 100.0)
-    
-    def _on_release(self):
-        self.logger.debug(f"Slider relâché: {self.device['name']} -> {self.slider.value()}%")
-        self.volume_changed.emit(self.device['id'], self.slider.value() / 100.0)
-        main_window = self.window()
-        if main_window and hasattr(main_window, 'statusBar'):
-            main_window.statusBar().showMessage(
-                self.i18n.tr('volume_changed_status').format(
-                    name=self.device.get('description', self.device.get('name', '')),
-                    value=self.slider.value()
-                ),
-                2000
-            )
-    
-    def _on_boost(self, checked):
-        self.logger.debug(f"Boost {self.device['name']}: {'activé' if checked else 'désactivé'}")
-        if checked:
-            self.slider.setRange(0, 150)
-        else:
-            self.slider.setRange(0, 100)
-            if self.slider.value() > 100:
-                self.slider.setValue(100)
-    
-    def update_volume(self, volume):
-        if not self.slider.is_dragging():
-            self.slider.blockSignals(True)
-            self.slider.setValue(int(volume * 100))
-            self.vol_label.setText(f"{int(volume * 100)}%")
-            self.slider.blockSignals(False)
-    
-    def update_info(self, rate, fmt, bits):
-        if rate != '?':
-            text = f"{rate} Hz / {fmt}"
-            if bits:
-                text += f" / {bits} bits"
-            self.info_lbl.setText(text)
-    
-    def set_selected(self, selected):
-        self.card.set_selected(selected)
-
-
-# --- Ligne device entrée + volume + infos ---
-class DeviceInputRow(QWidget):
-    volume_changed = pyqtSignal(int, float)
-    
-    def __init__(self, device, pw):
-        super().__init__()
-        self.device = device
-        self.pw = pw
-        self.i18n = I18n.instance()
-        self.logger = Logger.instance()
-        self._init_ui()
-    
-    def _init_ui(self):
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 4, 0, 4)
-        layout.setSpacing(30)
-        
-        self.card = DeviceCard(self.device, self.device.get('is_default', False))
-        self.card.clicked.connect(self._on_card_clicked)
-        layout.addWidget(self.card)
-        
-        vol_layout = QVBoxLayout()
-        vol_layout.setSpacing(2)
-        
-        vol_top = QHBoxLayout()
-        vol_top.setSpacing(30)
-        
-        self.slider = ClickSlider(Qt.Orientation.Horizontal)
-        self.slider.setRange(0, 100)
-        self.slider.setValue(100)
-        self.slider.setMinimumWidth(100)
-        self.slider.setMaximumWidth(800)
-        self.slider.valueChanged.connect(self._on_slider_moved)
-        self.slider.sliderReleased.connect(self._on_release)
-        self.slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                height: 4px; background: #444; border-radius: 2px;
-            }
-            QSlider::handle:horizontal {
-                width: 10px; height: 10px; margin: -3px 0;
-                background: #fff; border-radius: 5px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #4CAF50; border-radius: 2px;
-            }
-        """)
-        vol_top.addWidget(self.slider, 1)
-        
-        self.vol_label = QLabel("100%")
-        self.vol_label.setFont(QFont("Monospace", 9))
-        self.vol_label.setStyleSheet("color: white;")
-        self.vol_label.setFixedWidth(40)
-        self.vol_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        vol_top.addWidget(self.vol_label)
-        
-        vol_layout.addLayout(vol_top)
-        
-        info_layout = QHBoxLayout()
-        info_layout.setSpacing(0)
-        info_layout.setContentsMargins(30, 0, 0, 0)
-        self.info_lbl = QLabel("48000 Hz / S32LE")
-        self.info_lbl.setFont(QFont("Monospace", 8))
-        self.info_lbl.setStyleSheet("color: #aaa;")
-        info_layout.addWidget(self.info_lbl)
-        info_layout.addStretch()
-        vol_layout.addLayout(info_layout)
-        
-        boost_spacer = QWidget()
-        boost_spacer.setFixedHeight(20)
-        vol_layout.addWidget(boost_spacer)
-        
-        layout.addLayout(vol_layout, 1)
-        self.setLayout(layout)
-    
-    def _on_card_clicked(self, device):
-        self.logger.info(f"Clic sur carte périphérique entrée: {device.get('name', 'inconnu')}")
-        if self.pw.set_default_device(device['id']):
-            main_window = self.window()
-            if main_window and hasattr(main_window, 'statusBar'):
-                main_window.statusBar().showMessage(
-                    self.i18n.tr('default_input_changed').format(description=device.get('description', '')),
-                    3000
-                )
-    
-    def _on_slider_moved(self, value):
-        self.vol_label.setText(f"{value}%")
-        if self.slider.is_dragging():
-            self.volume_changed.emit(self.device['id'], value / 100.0)
-    
-    def _on_release(self):
-        self.logger.debug(f"Slider relâché: {self.device['name']} -> {self.slider.value()}%")
-        self.volume_changed.emit(self.device['id'], self.slider.value() / 100.0)
-        main_window = self.window()
-        if main_window and hasattr(main_window, 'statusBar'):
-            main_window.statusBar().showMessage(
-                self.i18n.tr('volume_changed_status').format(
-                    name=self.device.get('description', self.device.get('name', '')),
-                    value=self.slider.value()
-                ),
-                2000
-            )
-    
-    def update_volume(self, volume):
-        if not self.slider.is_dragging():
-            self.slider.blockSignals(True)
-            self.slider.setValue(int(volume * 100))
-            self.vol_label.setText(f"{int(volume * 100)}%")
-            self.slider.blockSignals(False)
-    
-    def update_info(self, rate, fmt, bits):
-        if rate != '?':
-            text = f"{rate} Hz / {fmt}"
-            if bits:
-                text += f" / {bits} bits"
-            self.info_lbl.setText(text)
-    
-    def set_selected(self, selected):
-        self.card.set_selected(selected)
-
-
-# --- Ligne flux ---
-class StreamRow(QFrame):
-    volume_changed = pyqtSignal(int, float)
-    device_change_requested = pyqtSignal(dict)
-    
-    def __init__(self, stream, pw):
-        super().__init__()
-        self.stream = stream
-        self.pw = pw
-        self.i18n = I18n.instance()
-        self.logger = Logger.instance()
-        self.device_badge = None
-        self.setFrameStyle(QFrame.Shape.NoFrame)
-        self.setStyleSheet("background-color: #2a2a2a; border-radius: 4px; margin: 1px 0;")
-        self.setMinimumHeight(64)
-        self.setMaximumHeight(64)
-        
-        layout = QHBoxLayout()
-        layout.setContentsMargins(8, 4, 8, 4)
-        layout.setSpacing(10)
-        
-        self.icon_lbl = QLabel()
-        self.icon_lbl.setFixedSize(24, 24)
-        self._update_icon()
-        self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.icon_lbl)
-        
-        text_layout = QVBoxLayout()
-        text_layout.setSpacing(1)
-        text_layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.name_lbl = QLabel(stream.get('name', '')[:30])
-        self.name_lbl.setFont(QFont("Monospace", 8))
-        self.name_lbl.setStyleSheet("color: #aaaaaa;")
-        text_layout.addWidget(self.name_lbl)
-        
-        self.meta_lbl = QLabel("")
-        self.meta_lbl.setFont(QFont("Monospace", 7))
-        self.meta_lbl.setStyleSheet("color: #666;")
-        self.meta_lbl.setVisible(False)
-        text_layout.addWidget(self.meta_lbl)
-        
-        layout.addLayout(text_layout, 1)
-        
-        self.rate_lbl = QLabel("?")
-        self.rate_lbl.setFont(QFont("Monospace", 7))
-        self.rate_lbl.setStyleSheet("color: #888888;")
-        self.rate_lbl.setFixedWidth(55)
-        self.rate_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.rate_lbl)
-        
-        self.slider = ClickSlider(Qt.Orientation.Horizontal)
-        self.slider.setRange(0, 100)
-        self.slider.setValue(100)
-        self.slider.setMinimumWidth(50)
-        self.slider.setMaximumWidth(300)
-        self.slider.valueChanged.connect(self._on_slider_moved)
-        self.slider.sliderReleased.connect(self._on_release)
-        layout.addWidget(self.slider, 1)
-        
-        self.vol_lbl = QLabel("100%")
-        self.vol_lbl.setFont(QFont("Monospace", 7))
-        self.vol_lbl.setStyleSheet("color: #888888;")
-        self.vol_lbl.setFixedWidth(35)
-        self.vol_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        layout.addWidget(self.vol_lbl, alignment=Qt.AlignmentFlag.AlignVCenter)
-        
-        self.setLayout(layout)
-        self._update_metadata()
-    
-    def _update_icon(self):
-        icon_name = self.stream.get('icon_name', '')
-        if icon_name:
-            icon = QIcon.fromTheme(icon_name)
-            if not icon.isNull():
-                self.icon_lbl.setPixmap(icon.pixmap(24, 24))
-                return
-            icon = QIcon.fromTheme(icon_name.lower())
-            if not icon.isNull():
-                self.icon_lbl.setPixmap(icon.pixmap(24, 24))
-                return
-        self.icon_lbl.setText("🎵")
-        self.icon_lbl.setFont(QFont("Monospace", 12))
-    
-    def _update_metadata(self):
-        media_title = self.stream.get('media_title', '')
-        media_name = self.stream.get('media_name', '')
-        media_artist = self.stream.get('media_artist', '')
-        
-        meta_parts = []
-        if media_title:
-            meta_parts.append(media_title)
-        elif media_name:
-            meta_parts.append(media_name)
-        if media_artist:
-            meta_parts.append(media_artist)
-        
-        if meta_parts:
-            self.meta_lbl.setText(" · ".join(meta_parts)[:60])
-            self.meta_lbl.setVisible(True)
-        else:
-            self.meta_lbl.setVisible(False)
-    
-    def set_device_badge(self, device):
-        """Ajoute ou met à jour la vignette du périphérique"""
-        if self.device_badge is None:
-            self.device_badge = StreamDeviceBadge(device)
-            self.device_badge.setFixedSize(56, 56)
-            self.device_badge.clicked.connect(lambda: self.device_change_requested.emit(self.stream))
-            self.layout().addWidget(self.device_badge)
-        else:
-            self.device_badge.device = device
-            self.device_badge.setToolTip(device.get('description', ''))
-            self.device_badge.name_lbl.setText(device.get('description', '')[:12])
-            icon_path = get_device_icon_path(device)
-            if os.path.exists(icon_path):
-                pixmap = QPixmap(icon_path)
-                pixmap = pixmap.scaled(22, 22, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                self.device_badge.icon_lbl.setPixmap(pixmap)
-    
-    def update_stream(self, stream):
-        self.stream = stream
-        self.name_lbl.setText(stream.get('name', '')[:30])
-        self._update_icon()
-        
-        rate = stream.get('rate', '?')
-        if rate != '?' and rate is not None:
-            r = int(rate)
-            self.rate_lbl.setText(f"{r/1000:.1f}k" if r >= 1000 else f"{r} Hz")
-        
-        self._update_metadata()
-    
-    def _on_slider_moved(self, value):
-        self.vol_lbl.setText(f"{value}%")
-        if self.slider.is_dragging():
-            self.volume_changed.emit(self.stream.get('id', 0), value / 100.0)
-    
-    def _on_release(self):
-        self.logger.debug(f"Slider flux relâché: {self.stream.get('name', 'inconnu')} -> {self.slider.value()}%")
-        self.volume_changed.emit(self.stream.get('id', 0), self.slider.value() / 100.0)
-        main_window = self.window()
-        if main_window and hasattr(main_window, 'statusBar'):
-            main_window.statusBar().showMessage(
-                self.i18n.tr('volume_changed_status').format(
-                    name=self.stream.get('name', ''),
-                    value=self.slider.value()
-                ),
-                2000
-            )
-    
-    def update_volume(self, volume):
-        if not self.slider.is_dragging():
-            self.slider.blockSignals(True)
-            self.slider.setValue(int(volume * 100))
-            self.vol_lbl.setText(f"{int(volume * 100)}%")
-            self.slider.blockSignals(False)
-
-
-# --- Onglet Audio principal ---
 class AudioTab(QWidget):
+    """Onglet Audio avec sous-onglets Sorties, Entrées, Périphériques"""
+    
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
         self.i18n = I18n.instance()
         self.logger = Logger.instance()
+        self.mpris = MprisHelper(self.logger)
         self.device_rows = {}
         self.input_rows = {}
         self.stream_rows = {}
         self.selected_output = None
         self.selected_input = None
         self._prev_device_names = set()
-        self._mpris_cache = {}
-        self._mpris_cache_time = 0
         self._desktop_names_cache = {}
         self._init_ui()
         self.refresh_devices()
@@ -742,6 +48,7 @@ class AudioTab(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(8)
         
+        # Sous-navigation
         sub_nav_layout = QHBoxLayout()
         sub_nav_layout.setContentsMargins(0, 4, 0, 4)
         sub_nav_layout.setSpacing(1)
@@ -791,6 +98,27 @@ class AudioTab(QWidget):
         self.sub_stack = QStackedWidget()
         
         # Page Sorties
+        self._init_output_page()
+        
+        # Page Entrées
+        self._init_input_page()
+        
+        # Page Périphériques
+        self._init_devices_page()
+        
+        layout.addWidget(self.sub_stack)
+        
+        # Flux actifs
+        self._init_streams_section(layout)
+        
+        self.sub_buttons[0].setChecked(True)
+        self.sub_btn_group.idClicked.connect(self._on_sub_nav)
+        
+        self._restore_header_state()
+        
+        self.setLayout(layout)
+    
+    def _init_output_page(self):
         self.output_tab = QWidget()
         output_layout = QVBoxLayout()
         output_layout.setSpacing(2)
@@ -815,8 +143,8 @@ class AudioTab(QWidget):
         output_layout.addWidget(self.output_gb)
         self.output_tab.setLayout(output_layout)
         self.sub_stack.addWidget(self.output_tab)
-        
-        # Page Entrées
+    
+    def _init_input_page(self):
         self.input_tab = QWidget()
         input_layout = QVBoxLayout()
         input_layout.setSpacing(2)
@@ -841,8 +169,8 @@ class AudioTab(QWidget):
         input_layout.addWidget(self.input_gb)
         self.input_tab.setLayout(input_layout)
         self.sub_stack.addWidget(self.input_tab)
-        
-        # Page Périphériques
+    
+    def _init_devices_page(self):
         self.devices_page = QWidget()
         devices_page_layout = QVBoxLayout()
         devices_page_layout.setSpacing(8)
@@ -904,10 +232,8 @@ class AudioTab(QWidget):
         
         self.devices_page.setLayout(devices_page_layout)
         self.sub_stack.addWidget(self.devices_page)
-        
-        layout.addWidget(self.sub_stack)
-        
-        # Flux actifs
+    
+    def _init_streams_section(self, layout):
         self.flux_gb = QGroupBox(self.i18n.tr('flux_actifs'))
         flux_layout = QVBoxLayout()
         
@@ -933,13 +259,6 @@ class AudioTab(QWidget):
         
         self.flux_gb.setLayout(flux_layout)
         layout.addWidget(self.flux_gb)
-        
-        self.sub_buttons[0].setChecked(True)
-        self.sub_btn_group.idClicked.connect(self._on_sub_nav)
-        
-        self._restore_header_state()
-        
-        self.setLayout(layout)
     
     def _on_sub_nav(self, idx):
         self.sub_stack.setCurrentIndex(idx)
@@ -984,88 +303,6 @@ class AudioTab(QWidget):
         except Exception as e:
             self.logger.error(f"Erreur lecture target.object: {e}")
         return ''
-    
-    def _get_mpris_players(self):
-        now = time.time()
-        if now - self._mpris_cache_time < 5:
-            return list(self._mpris_cache.keys())
-        
-        try:
-            result = subprocess.run(
-                ['dbus-send', '--session', '--print-reply',
-                 '--dest=org.freedesktop.DBus',
-                 '/org/freedesktop/DBus',
-                 'org.freedesktop.DBus.ListNames'],
-                capture_output=True, text=True, timeout=3
-            )
-            players = []
-            for line in result.stdout.split('\n'):
-                if 'org.mpris.MediaPlayer2' in line:
-                    match = re.search(r'org\.mpris\.MediaPlayer2\.([^"]+)"', line)
-                    if match:
-                        players.append(match.group(1).strip())
-            
-            self._mpris_cache = {p: True for p in players}
-            self._mpris_cache_time = now
-            return players
-        except Exception:
-            return list(self._mpris_cache.keys())
-    
-    def _get_mpris_metadata(self, player_name):
-        try:
-            result = subprocess.run(
-                ['dbus-send', '--session', '--print-reply',
-                 f'--dest=org.mpris.MediaPlayer2.{player_name}',
-                 '/org/mpris/MediaPlayer2',
-                 'org.freedesktop.DBus.Properties.Get',
-                 'string:org.mpris.MediaPlayer2.Player',
-                 'string:Metadata'],
-                capture_output=True, text=True, timeout=3
-            )
-            
-            metadata = {}
-            title_match = re.search(r'xesam:title.*?string\s+"([^"]+)"', result.stdout, re.DOTALL)
-            artist_match = re.search(r'xesam:artist.*?string\s+"([^"]+)"', result.stdout, re.DOTALL)
-            album_match = re.search(r'xesam:album.*?string\s+"([^"]+)"', result.stdout, re.DOTALL)
-            
-            if title_match:
-                metadata['media_title'] = title_match.group(1)
-            if artist_match:
-                metadata['media_artist'] = artist_match.group(1)
-            if album_match:
-                metadata['media_album'] = album_match.group(1)
-            
-            return metadata
-        except Exception:
-            return {}
-    
-    def _get_mpris_metadata_for_app(self, app_name):
-        app_lower = app_name.lower()
-        
-        players = self._get_mpris_players()
-        
-        for player in players:
-            player_lower = player.lower()
-            if app_lower in player_lower or player_lower in app_lower:
-                return self._get_mpris_metadata(player)
-        
-        if '.' in app_lower:
-            binary_guess = app_lower.split('.')[-1]
-            for player in players:
-                player_lower = player.lower()
-                if binary_guess in player_lower or player_lower in binary_guess:
-                    return self._get_mpris_metadata(player)
-        
-        cleaned = re.sub(r'[\[\]]', ' ', app_lower)
-        cleaned = re.sub(r'\bpipewire\b|\balsa\b|\bplayback\b|\bcapture\b', '', cleaned)
-        cleaned = cleaned.strip()
-        
-        if cleaned and cleaned != app_lower:
-            for player in players:
-                if cleaned in player.lower():
-                    return self._get_mpris_metadata(player)
-        
-        return {}
     
     def _get_desktop_name(self, binary):
         if binary in self._desktop_names_cache:
@@ -1404,12 +641,13 @@ class AudioTab(QWidget):
         
         for device in devices:
             name = device['name']
+            is_input = direction == 'entrée'
             if name in old_rows:
                 row = old_rows[name]
                 row.device = device
                 row.card.device = device
             else:
-                row = DeviceVolumeRow(device, self.pw) if direction == 'sortie' else DeviceInputRow(device, self.pw)
+                row = DeviceRow(device, self.pw, is_input=is_input)
                 row.volume_changed.connect(lambda did, vol: self.pw.set_volume(did, vol))
                 self.logger.debug(f"Nouveau périphérique ajouté: {name}")
             rows[name] = row
@@ -1610,7 +848,7 @@ class AudioTab(QWidget):
                 search_names.append(app)
                 
                 for search_name in search_names:
-                    mpris_meta = self._get_mpris_metadata_for_app(search_name)
+                    mpris_meta = self.mpris.get_metadata_for_app(search_name)
                     if mpris_meta:
                         stream_data.update(mpris_meta)
                         break

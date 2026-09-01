@@ -12,7 +12,7 @@ from PyQt6.QtCore import Qt, QSettings
 
 from pipewire_manager import PipeWireManager
 from config_manager import ConfigManager
-from .audio_tab import AudioTab
+from .audio.audio_tab import AudioTab
 from .settings_tab import SettingsTab
 from .routing_tab import RoutingTab
 from .profiles_tab import ProfilesTab
