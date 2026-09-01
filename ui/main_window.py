@@ -7,8 +7,8 @@ from PyQt6.QtWidgets import (
     QDialog, QDialogButtonBox, QFormLayout, QComboBox, QCheckBox,
     QLabel, QToolButton, QApplication
 )
-from PyQt6.QtGui import QPalette, QIcon, QAction, QKeySequence, QShortcut, QFont
-from PyQt6.QtCore import Qt, QSettings
+from PyQt6.QtGui import QPalette, QIcon, QAction, QKeySequence, QShortcut, QFont, QColor
+from PyQt6.QtCore import Qt, QSettings, QTimer
 
 from pipewire_manager import PipeWireManager
 from config_manager import ConfigManager
@@ -60,7 +60,8 @@ class UIConfig:
             },
             'language': 'auto',
             'close_behavior': 'tray',
-            'experimental_features': False
+            'experimental_features': False,
+            'theme': 'auto'  # 'auto', 'gtk_dark', 'gtk_light', 'dark_alt', 'light_alt'
         }
         self.config = self._load()
     
@@ -78,6 +79,8 @@ class UIConfig:
                         config['close_behavior'] = loaded['close_behavior']
                     if 'experimental_features' in loaded:
                         config['experimental_features'] = loaded['experimental_features']
+                    if 'theme' in loaded:
+                        config['theme'] = loaded['theme']
                     return config
             except Exception:
                 pass
@@ -101,10 +104,19 @@ class UIConfig:
             return get_system_lang()
         return self.config['language']
     
+    def get_theme(self):
+        """Retourne le thème effectif"""
+        theme = self.config.get('theme', 'auto')
+        if theme == 'auto':
+            bg = _get_gtk_bg()
+            if bg and _is_dark(bg):
+                return 'gtk_dark'
+            return 'gtk_light'
+        return theme
+    
     def is_tab_visible(self, tab_key):
         if tab_key == 'output':
             return True
-        # Les onglets expérimentaux nécessitent l'activation des fonctionnalités expérimentales
         if tab_key in ('routing', 'fx'):
             return self.config.get('experimental_features', False) and self.config['visible_tabs'].get(tab_key, False)
         return self.config['visible_tabs'].get(tab_key, True)
@@ -133,6 +145,18 @@ class SettingsDialog(QDialog):
         if idx >= 0:
             self.lang_combo.setCurrentIndex(idx)
         form_layout.addRow(self.i18n.tr('language') + ':', self.lang_combo)
+        
+        # Thème
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItem(self.i18n.tr('theme_auto'), 'auto')
+        self.theme_combo.addItem(self.i18n.tr('theme_gtk_dark'), 'gtk_dark')
+        self.theme_combo.addItem(self.i18n.tr('theme_gtk_light'), 'gtk_light')
+        self.theme_combo.addItem(self.i18n.tr('theme_dark_alt'), 'dark_alt')
+        current_theme = ui_config.config.get('theme', 'auto')
+        idx = self.theme_combo.findData(current_theme)
+        if idx >= 0:
+            self.theme_combo.setCurrentIndex(idx)
+        form_layout.addRow(self.i18n.tr('theme') + ':', self.theme_combo)
         
         # Comportement à la fermeture
         self.close_combo = QComboBox()
@@ -204,7 +228,6 @@ class SettingsDialog(QDialog):
         layout.addWidget(button_box)
     
     def _on_experimental_toggled(self, checked):
-        """Active/désactive les cases à cocher des onglets expérimentaux"""
         self.experimental_warning.setVisible(checked)
         for key in ('routing', 'fx'):
             if key in self.tab_checkboxes:
@@ -216,6 +239,7 @@ class SettingsDialog(QDialog):
     
     def _on_save(self):
         self.ui_config.config['language'] = self.lang_combo.currentData()
+        self.ui_config.config['theme'] = self.theme_combo.currentData()
         self.ui_config.config['close_behavior'] = self.close_combo.currentData()
         self.ui_config.config['experimental_features'] = self.experimental_cb.isChecked()
         
@@ -236,6 +260,7 @@ class SettingsDialog(QDialog):
         if reply == QMessageBox.StandardButton.Yes:
             if self.ui_config.reset():
                 self.lang_combo.setCurrentIndex(self.lang_combo.findData('auto'))
+                self.theme_combo.setCurrentIndex(self.theme_combo.findData('auto'))
                 self.close_combo.setCurrentIndex(self.close_combo.findData('tray'))
                 self.experimental_cb.setChecked(False)
                 self.experimental_warning.setVisible(False)
@@ -260,108 +285,23 @@ class MainWindow(QMainWindow):
         self.lang = self.i18n.get_lang()
         self.logger = Logger.instance()
         
+        # Fenêtre sans barre de titre système
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        
         self.setWindowTitle(self.i18n.tr('title'))
         self.setMinimumSize(700, 500)
         
-        # Style global pour les tooltips
-        self.setStyleSheet("""
-            QToolTip {
-                background-color: #2a2a2a;
-                color: #ffffff;
-                border: 1px solid #555;
-                padding: 4px 8px;
-                font-size: 12px;
-            }
-        """)
-        
-        bg = _get_gtk_bg() or self.palette().color(QPalette.ColorRole.Window).name()
-        dark = _is_dark(bg)
-        
-        if dark:
-            titlebar_bg, btn_bg, btn_checked, btn_hover = _darken(bg, 0.75), bg, _darken(bg, 0.55), _lighten(bg, 1.15)
-            btn_text, btn_text_checked, btn_text_hover = "#999", "#fff", "#ddd"
-        else:
-            titlebar_bg, btn_bg, btn_checked, btn_hover = _darken(bg, 0.85), bg, _darken(bg, 0.7), _lighten(bg, 1.05)
-            btn_text, btn_text_checked, btn_text_hover = "#666", "#000", "#333"
+        # Attributs pour le déplacement et redimensionnement
+        self._drag_pos = None
+        self._resize_dir = None
         
         central = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # Barre de navigation
-        nav = QWidget()
-        nav.setStyleSheet(f"background-color: {titlebar_bg};")
-        nav_layout = QHBoxLayout()
-        nav_layout.setContentsMargins(0, 4, 0, 4)
-        nav_layout.setSpacing(1)
-        
-        nav_layout.addStretch(1)
-        
-        self.btn_group = QButtonGroup()
-        self.btn_group.setExclusive(True)
-        self.buttons = []
-        self.button_map = {}
-        
-        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status', 'fx']
-        visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
-        
-        btn_style = f"""
-            QPushButton {{
-                background-color: {btn_bg};
-                color: {btn_text};
-                border: 1px solid {titlebar_bg};
-                border-radius: 4px;
-                padding: 8px 18px;
-                font-size: 13px;
-            }}
-            QPushButton:checked {{
-                background-color: {btn_checked};
-                color: {btn_text_checked};
-                border-color: {btn_checked};
-            }}
-            QPushButton:hover:!checked {{
-                background-color: {btn_hover};
-                color: {btn_text_hover};
-            }}
-        """
-        
-        for idx, key in enumerate(visible_keys):
-            btn = QPushButton(self.i18n.tr(key))
-            btn.setCheckable(True)
-            btn.setStyleSheet(btn_style)
-            self.btn_group.addButton(btn, idx)
-            nav_layout.addWidget(btn)
-            self.buttons.append(btn)
-            self.button_map[key] = btn
-        
-        nav_layout.addStretch(1)
-        
-        # Bouton de configuration
-        settings_btn = QToolButton()
-        settings_btn.setText('⋮')
-        settings_btn.setToolTip(self.i18n.tr('settings_tooltip'))
-        settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        settings_btn.setFixedWidth(28)
-        settings_btn.setStyleSheet(f"""
-            QToolButton {{
-                background-color: transparent;
-                color: {btn_text};
-                border: none;
-                font-size: 16px;
-                font-weight: bold;
-                padding: 4px 0px;
-                margin-right: 12px;
-            }}
-            QToolButton:hover {{
-                color: {btn_text_hover};
-            }}
-        """)
-        settings_btn.clicked.connect(self._open_settings)
-        nav_layout.addWidget(settings_btn)
-        
-        nav.setLayout(nav_layout)
-        layout.addWidget(nav)
+        # Barre de navigation avec contrôles de fenêtre intégrés
+        self._create_navigation_bar(layout)
         
         wrapper = QWidget()
         wrapper_layout = QVBoxLayout()
@@ -407,6 +347,286 @@ class MainWindow(QMainWindow):
         self._restore_geometry()
         self._install_shortcuts()
     
+    def _get_theme_colors(self):
+        """Retourne les couleurs selon le thème"""
+        theme = self.ui_config.get_theme()
+        bg = _get_gtk_bg() or '#2a2a2a'
+        dark = _is_dark(bg)
+        
+        if theme == 'gtk_dark':
+            # Thème GTK sombre (comme avant)
+            titlebar_bg = _darken(bg, 0.75)
+            return {
+                'titlebar_bg': titlebar_bg,
+                'btn_bg': bg,
+                'btn_checked': _darken(bg, 0.55),
+                'btn_hover': _lighten(bg, 1.15),
+                'btn_text': '#999',
+                'btn_text_checked': '#fff',
+                'btn_text_hover': '#ddd',
+                'window_bg': bg,
+                'window_text': '#ccc'
+            }
+        elif theme == 'gtk_light':
+            # Thème GTK clair (comme avant)
+            titlebar_bg = _darken(bg, 0.85)
+            return {
+                'titlebar_bg': titlebar_bg,
+                'btn_bg': bg,
+                'btn_checked': _darken(bg, 0.7),
+                'btn_hover': _lighten(bg, 1.05),
+                'btn_text': '#666',
+                'btn_text_checked': '#000',
+                'btn_text_hover': '#333',
+                'window_bg': bg,
+                'window_text': '#333'
+            }
+        elif theme == 'dark_alt':
+            # Thème sombre alternatif (plus doux)
+            return {
+                'titlebar_bg': '#3a3a3e',
+                'btn_bg': '#4a4a4e',
+                'btn_checked': '#5a5a5e',
+                'btn_hover': '#6a6a6e',
+                'btn_text': '#aaa',
+                'btn_text_checked': '#fff',
+                'btn_text_hover': '#ddd',
+                'window_bg': '#3a3a3e',
+                'window_text': '#ddd'
+            }
+        else:
+            # Fallback auto
+            if dark:
+                titlebar_bg = _darken(bg, 0.75)
+                return {
+                    'titlebar_bg': titlebar_bg,
+                    'btn_bg': bg,
+                    'btn_checked': _darken(bg, 0.55),
+                    'btn_hover': _lighten(bg, 1.15),
+                    'btn_text': '#999',
+                    'btn_text_checked': '#fff',
+                    'btn_text_hover': '#ddd',
+                    'window_bg': bg,
+                    'window_text': '#ccc'
+                }
+            else:
+                titlebar_bg = _darken(bg, 0.85)
+                return {
+                    'titlebar_bg': titlebar_bg,
+                    'btn_bg': bg,
+                    'btn_checked': _darken(bg, 0.7),
+                    'btn_hover': _lighten(bg, 1.05),
+                    'btn_text': '#666',
+                    'btn_text_checked': '#000',
+                    'btn_text_hover': '#333',
+                    'window_bg': bg,
+                    'window_text': '#333'
+                }
+    
+    def _apply_theme(self):
+        """Applique le thème"""
+        colors = self._get_theme_colors()
+        
+        self.setStyleSheet(f"""
+            QMainWindow, QWidget {{ background-color: {colors['window_bg']}; color: {colors['window_text']}; }}
+            QToolTip {{
+                background-color: #2a2a2a;
+                color: #ffffff;
+                border: 1px solid #555;
+                padding: 4px 8px;
+                font-size: 12px;
+            }}
+        """)
+    
+    def _create_navigation_bar(self, layout):
+        """Crée la barre de navigation avec contrôles de fenêtre intégrés"""
+        colors = self._get_theme_colors()
+        
+        nav = QWidget()
+        nav.setStyleSheet(f"background-color: {colors['titlebar_bg']};")
+        nav_layout = QHBoxLayout()
+        nav_layout.setContentsMargins(4, 12, 4, 12)
+        nav_layout.setSpacing(2)
+        
+        # Titre à gauche sur 3 lignes
+        self.title_lbl = QLabel("PipeWire\nControl\nCenter")
+        self.title_lbl.setStyleSheet(f"""
+            color: {colors['btn_text_checked']};
+            font-size: 11px;
+            font-weight: bold;
+            padding: 0 4px;
+        """)
+        self.title_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        nav_layout.addWidget(self.title_lbl)
+        
+        nav_layout.addStretch(1)
+        
+        self.btn_group = QButtonGroup()
+        self.btn_group.setExclusive(True)
+        self.buttons = []
+        self.button_map = {}
+        
+        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status', 'fx']
+        visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
+        
+        btn_style = f"""
+            QPushButton {{
+                background-color: {colors['btn_bg']};
+                color: {colors['btn_text']};
+                border: 1px solid {colors['titlebar_bg']};
+                border-radius: 4px;
+                padding: 10px 18px;
+                min-height: 16px;
+                font-size: 13px;
+            }}
+            QPushButton:checked {{
+                background-color: {colors['btn_checked']};
+                color: {colors['btn_text_checked']};
+                border-color: {colors['btn_checked']};
+            }}
+            QPushButton:hover:!checked {{
+                background-color: {colors['btn_hover']};
+                color: {colors['btn_text_hover']};
+            }}
+        """
+        
+        for idx, key in enumerate(visible_keys):
+            btn = QPushButton(self.i18n.tr(key))
+            btn.setCheckable(True)
+            btn.setStyleSheet(btn_style)
+            self.btn_group.addButton(btn, idx)
+            nav_layout.addWidget(btn)
+            self.buttons.append(btn)
+            self.button_map[key] = btn
+        
+        nav_layout.addStretch(1)
+        
+        # Bouton de configuration
+        settings_btn = QToolButton()
+        settings_btn.setText('⋮')
+        settings_btn.setToolTip(self.i18n.tr('settings_tooltip'))
+        settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        settings_btn.setFixedWidth(28)
+        settings_btn.setStyleSheet(f"""
+            QToolButton {{
+                background-color: transparent;
+                color: {colors['btn_text']};
+                border: none;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 4px 0px;
+            }}
+            QToolButton:hover {{
+                color: {colors['btn_text_hover']};
+            }}
+        """)
+        settings_btn.clicked.connect(self._open_settings)
+        nav_layout.addWidget(settings_btn)
+        
+        # Bouton minimiser
+        min_btn = QToolButton()
+        min_btn.setText("─")
+        min_btn.setToolTip("Minimiser")
+        min_btn.setFixedSize(28, 28)
+        min_btn.setStyleSheet(f"""
+            QToolButton {{
+                background-color: transparent;
+                color: {colors['btn_text']};
+                border: none;
+                font-size: 14px;
+            }}
+            QToolButton:hover {{
+                background-color: {colors['btn_hover']};
+                color: {colors['btn_text_hover']};
+            }}
+        """)
+        min_btn.clicked.connect(self.showMinimized)
+        nav_layout.addWidget(min_btn)
+        
+        # Bouton fermer
+        close_btn = QToolButton()
+        close_btn.setText("✕")
+        close_btn.setToolTip("Fermer")
+        close_btn.setFixedSize(28, 28)
+        close_btn.setStyleSheet("""
+            QToolButton {
+                background-color: transparent;
+                color: #aaa;
+                border: none;
+                font-size: 14px;
+            }
+            QToolButton:hover {
+                background-color: #e81123;
+                color: white;
+            }
+        """)
+        close_btn.clicked.connect(self.close)
+        nav_layout.addWidget(close_btn)
+        
+        nav.setLayout(nav_layout)
+        layout.addWidget(nav)
+        
+        self.nav_widget = nav
+    
+    # --- Déplacement et redimensionnement ---
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            pos = event.position()
+            margin = 5
+            rect = self.rect()
+            
+            self._resize_dir = None
+            if pos.x() < margin:
+                self._resize_dir = 'left'
+            elif pos.x() > rect.width() - margin:
+                self._resize_dir = 'right'
+            if pos.y() < margin:
+                self._resize_dir = ('top' if not self._resize_dir else self._resize_dir + '_top')
+            elif pos.y() > rect.height() - margin:
+                self._resize_dir = ('bottom' if not self._resize_dir else self._resize_dir + '_bottom')
+            
+            if self._resize_dir:
+                self._drag_pos = event.globalPosition().toPoint()
+                event.accept()
+                return
+            
+            # Déplacement depuis la barre de navigation
+            if pos.y() < 40:
+                self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                event.accept()
+    
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.MouseButton.LeftButton and self._drag_pos is not None:
+            if self._resize_dir:
+                self._do_resize(event)
+            else:
+                self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+        self._resize_dir = None
+        event.accept()
+    
+    def _do_resize(self, event):
+        pos = event.globalPosition().toPoint()
+        delta = pos - self._drag_pos
+        geo = self.geometry()
+        
+        if 'left' in self._resize_dir:
+            geo.setLeft(geo.left() + delta.x())
+        elif 'right' in self._resize_dir:
+            geo.setRight(geo.right() + delta.x())
+        if 'top' in self._resize_dir:
+            geo.setTop(geo.top() + delta.y())
+        elif 'bottom' in self._resize_dir:
+            geo.setBottom(geo.bottom() + delta.y())
+        
+        if geo.width() >= self.minimumWidth() and geo.height() >= self.minimumHeight():
+            self.setGeometry(geo)
+            self._drag_pos = pos
+    
+    # --- Reste des méthodes ---
     def _restore_geometry(self):
         settings = QSettings('PipeWireControlCenter', 'MainWindow')
         geometry = settings.value('geometry')
@@ -499,98 +719,26 @@ class MainWindow(QMainWindow):
             self.lang = self.i18n.get_lang()
             self.setWindowTitle(self.i18n.tr('title'))
             self.statusBar().showMessage(self.i18n.tr('ui_config_saved'), 3000)
+            
+            # Appliquer le thème
+            self._apply_theme()
+            
+            # Reconstruire la navigation
             self._rebuild_navigation()
             self._rebuild_stack()
             self._install_shortcuts()
     
     def _rebuild_navigation(self):
-        old_nav = self.centralWidget().layout().itemAt(0).widget()
-        if old_nav:
-            old_nav.deleteLater()
+        # Supprimer l'ancienne navigation
+        if hasattr(self, 'nav_widget') and self.nav_widget:
+            self.nav_widget.deleteLater()
         
-        bg = _get_gtk_bg() or self.palette().color(QPalette.ColorRole.Window).name()
-        dark = _is_dark(bg)
+        # Recréer la navigation
+        layout = self.centralWidget().layout()
+        self._create_navigation_bar(layout)
         
-        if dark:
-            titlebar_bg, btn_bg, btn_checked, btn_hover = _darken(bg, 0.75), bg, _darken(bg, 0.55), _lighten(bg, 1.15)
-            btn_text, btn_text_checked, btn_text_hover = "#999", "#fff", "#ddd"
-        else:
-            titlebar_bg, btn_bg, btn_checked, btn_hover = _darken(bg, 0.85), bg, _darken(bg, 0.7), _lighten(bg, 1.05)
-            btn_text, btn_text_checked, btn_text_hover = "#666", "#000", "#333"
-        
-        nav = QWidget()
-        nav.setStyleSheet(f"background-color: {titlebar_bg};")
-        nav_layout = QHBoxLayout()
-        nav_layout.setContentsMargins(0, 4, 0, 4)
-        nav_layout.setSpacing(1)
-        
-        nav_layout.addStretch(1)
-        
-        self.btn_group = QButtonGroup()
-        self.btn_group.setExclusive(True)
-        self.buttons = []
-        self.button_map = {}
-        
-        all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status', 'fx']
-        visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
-        
-        btn_style = f"""
-            QPushButton {{
-                background-color: {btn_bg};
-                color: {btn_text};
-                border: 1px solid {titlebar_bg};
-                border-radius: 4px;
-                padding: 8px 18px;
-                font-size: 13px;
-            }}
-            QPushButton:checked {{
-                background-color: {btn_checked};
-                color: {btn_text_checked};
-                border-color: {btn_checked};
-            }}
-            QPushButton:hover:!checked {{
-                background-color: {btn_hover};
-                color: {btn_text_hover};
-            }}
-        """
-        
-        for idx, key in enumerate(visible_keys):
-            btn = QPushButton(self.i18n.tr(key))
-            btn.setCheckable(True)
-            btn.setStyleSheet(btn_style)
-            self.btn_group.addButton(btn, idx)
-            nav_layout.addWidget(btn)
-            self.buttons.append(btn)
-            self.button_map[key] = btn
-        
-        nav_layout.addStretch(1)
-        
-        settings_btn = QToolButton()
-        settings_btn.setText('⋮')
-        settings_btn.setToolTip(self.i18n.tr('settings_tooltip'))
-        settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        settings_btn.setFixedWidth(28)
-        settings_btn.setStyleSheet(f"""
-            QToolButton {{
-                background-color: transparent;
-                color: {btn_text};
-                border: none;
-                font-size: 16px;
-                font-weight: bold;
-                padding: 4px 0px;
-                margin-right: 12px;
-            }}
-            QToolButton:hover {{
-                color: {btn_text_hover};
-            }}
-        """)
-        settings_btn.clicked.connect(self._open_settings)
-        nav_layout.addWidget(settings_btn)
-        
-        nav.setLayout(nav_layout)
-        
-        main_layout = self.centralWidget().layout()
-        main_layout.insertWidget(0, nav)
+        # Insérer au bon endroit
+        layout.insertWidget(0, self.nav_widget)
         
         if self.buttons:
             self.buttons[0].setChecked(True)
