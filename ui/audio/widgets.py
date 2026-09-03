@@ -44,6 +44,8 @@ class DeviceCard(QFrame):
         self.logger = Logger.instance()
         self._colors = None
         self.is_selected = is_selected
+        self._style_cache = None
+        self._loaded_icon_path = None
         self.setProperty("selected", is_selected)
         self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -80,8 +82,12 @@ class DeviceCard(QFrame):
         self._apply_style()
     
     def _load_icon(self):
-        """Charge l'icône selon le thème actuel"""
+        """Charge l'icône selon le thème actuel (avec cache)"""
         icon_path = get_device_icon_path(self.device, self._colors)
+        if self._loaded_icon_path == icon_path:
+            return
+        self._loaded_icon_path = icon_path
+        
         if os.path.exists(icon_path):
             pixmap = QPixmap(icon_path)
             pixmap = pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
@@ -91,8 +97,12 @@ class DeviceCard(QFrame):
             self.icon_lbl.setFont(QFont("Monospace", 20))
     
     def _apply_style(self):
-        """Applique le style selon l'état sélectionné"""
+        """Applique le style selon l'état sélectionné (avec cache)"""
         c = self._colors if self._colors else {}
+        cache_key = (self.is_selected, str(c))
+        if self._style_cache == cache_key:
+            return
+        self._style_cache = cache_key
         
         if self.is_selected:
             bg = c.get('device_card_selected_bg', c.get('btn_checked', '#1565C0'))
@@ -126,6 +136,7 @@ class DeviceCard(QFrame):
             DeviceCard QLabel {{
                 color: {text};
                 background: transparent;
+                border: none;
             }}
         """)
     
@@ -156,6 +167,8 @@ class StreamDeviceBadge(QFrame):
         super().__init__(parent)
         self.device = device
         self._colors = None
+        self._style_cache = None
+        self._loaded_icon_path = None
         self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedSize(56, 56)
@@ -182,8 +195,12 @@ class StreamDeviceBadge(QFrame):
         self._load_icon()
     
     def _load_icon(self):
-        """Charge l'icône selon le thème actuel"""
+        """Charge l'icône selon le thème actuel (avec cache)"""
         icon_path = get_device_icon_path(self.device, self._colors)
+        if self._loaded_icon_path == icon_path:
+            return
+        self._loaded_icon_path = icon_path
+        
         if os.path.exists(icon_path):
             pixmap = QPixmap(icon_path)
             pixmap = pixmap.scaled(22, 22, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
@@ -193,22 +210,28 @@ class StreamDeviceBadge(QFrame):
             self.icon_lbl.setFont(QFont("Monospace", 10))
     
     def set_theme_colors(self, colors):
-        """Applique les couleurs du thème et recharge l'icône"""
+        """Applique les couleurs du thème et recharge l'icône (avec cache)"""
+        cache_key = str(colors)
+        if self._style_cache == cache_key:
+            return
+        self._style_cache = cache_key
+        
         self._colors = colors
         c = colors
         self.setStyleSheet(f"""
-            QFrame {{
-                background-color: {c.get('btn_checked', '#1565C0')};
-                border: none;
+            StreamDeviceBadge {{
+                background-color: {c.get('device_card_normal_bg', '#2a2a2a')};
+                border: 1px solid {c.get('device_card_normal_border', '#444444')};
                 border-radius: 8px;
             }}
-            QFrame:hover {{
-                background-color: {c.get('btn_hover', '#1976D2')};
-                border: none;
+            StreamDeviceBadge:hover {{
+                background-color: {c.get('btn_hover', '#333333')};
+                border: 1px solid {c.get('btn_text_hover', '#666666')};
             }}
-            QFrame QLabel {{
-                color: {c.get('btn_text_checked', '#ffffff')};
+            StreamDeviceBadge QLabel {{
+                color: {c.get('device_card_normal_text', '#cccccc')};
                 background: transparent;
+                border: none;
             }}
         """)
         self._load_icon()

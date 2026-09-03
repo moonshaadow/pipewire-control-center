@@ -291,7 +291,7 @@ class MainWindow(QMainWindow):
         
         wrapper = QWidget()
         wrapper_layout = QVBoxLayout()
-        wrapper_layout.setContentsMargins(16, 16, 16, 16)
+        wrapper_layout.setContentsMargins(16, 4, 16, 16)
         
         self.stack = QStackedWidget()
         wrapper_layout.addWidget(self.stack)
@@ -301,22 +301,19 @@ class MainWindow(QMainWindow):
         central.setLayout(layout)
         self.setCentralWidget(central)
         
+        # Création immédiate des onglets légers et essentiels
         self.audio_tab = AudioTab(self.pw)
-        self.settings_tab = SettingsTab(self.pw)
-        self.routing_tab = RoutingTab(self.pw)
         self.profiles_tab = ProfilesTab(self.pw, self.config_mgr)
-        self.aes67_tab = Aes67Tab(self.pw)
-        self.status_tab = StatusTab(self.pw)
-        self.fx_tab = FXTab(self.pw)
         
+        # Les autres onglets sont créés à la demande (lazy loading)
         self.all_tabs = {
             'output': self.audio_tab,
-            'settings': self.settings_tab,
-            'routing': self.routing_tab,
+            'settings': None,
+            'routing': None,
             'profiles': self.profiles_tab,
-            'aes67': self.aes67_tab,
-            'status': self.status_tab,
-            'fx': self.fx_tab
+            'aes67': None,
+            'status': None,
+            'fx': None
         }
         
         self._rebuild_stack()
@@ -325,7 +322,8 @@ class MainWindow(QMainWindow):
             self.buttons[0].setChecked(True)
         self.btn_group.idClicked.connect(self._on_nav)
         self.profiles_tab.profile_loaded.connect(lambda: (
-            self.audio_tab.load_current(), self.settings_tab.load_current(),
+            self.audio_tab.load_current(),
+            self.all_tabs['settings'].load_current() if self.all_tabs['settings'] else None,
             self.statusBar().showMessage(self.i18n.tr('profile_loaded'), 5000)
         ))
         self.statusBar().showMessage(self.i18n.tr('ready').format(self.pw.get_version()), 5000)
@@ -370,7 +368,6 @@ class MainWindow(QMainWindow):
         if theme in THEMES:
             return THEMES[theme].copy()
         
-        # Fallback
         return THEMES['dark_alt'].copy()
     
     def _apply_theme(self):
@@ -394,7 +391,7 @@ class MainWindow(QMainWindow):
         
         self._apply_theme_to_tabs()
         for tab in self.all_tabs.values():
-            if hasattr(tab, 'refresh_language'):
+            if tab is not None and hasattr(tab, 'refresh_language'):
                 try:
                     tab.refresh_language()
                 except Exception:
@@ -403,7 +400,7 @@ class MainWindow(QMainWindow):
     def _apply_theme_to_tabs(self):
         colors = self._get_theme_colors()
         for tab in self.all_tabs.values():
-            if hasattr(tab, 'set_theme_colors'):
+            if tab is not None and hasattr(tab, 'set_theme_colors'):
                 try:
                     tab.set_theme_colors(colors)
                 except Exception:
@@ -579,43 +576,73 @@ class MainWindow(QMainWindow):
         if current_idx < len(visible_keys):
             key = visible_keys[current_idx]
             if key == 'status':
-                self.status_tab.refresh()
+                if self.all_tabs['status']:
+                    self.all_tabs['status'].refresh()
             elif key == 'output':
                 self.audio_tab.refresh_devices()
             elif key == 'settings':
-                self.settings_tab.load_current()
+                if self.all_tabs['settings']:
+                    self.all_tabs['settings'].load_current()
             elif key == 'routing':
-                self.routing_tab.refresh()
+                if self.all_tabs['routing']:
+                    self.all_tabs['routing'].refresh()
             elif key == 'fx':
-                self.fx_tab.refresh_language()
+                if self.all_tabs['fx']:
+                    self.all_tabs['fx'].refresh_language()
             self.statusBar().showMessage(self.i18n.tr('refreshed'), 2000)
     
     def _refresh_all(self):
         self.audio_tab.refresh_devices()
-        self.status_tab.refresh()
+        if self.all_tabs['status']:
+            self.all_tabs['status'].refresh()
         self.statusBar().showMessage(self.i18n.tr('full_refresh'), 2000)
     
     def _quit_app(self):
         self._save_geometry()
         self.audio_tab.shutdown()
-        self.settings_tab.shutdown()
-        self.status_tab.shutdown()
-        self.aes67_tab.shutdown()
-        self.fx_tab.shutdown()
+        for key in ['settings', 'routing', 'profiles', 'aes67', 'status', 'fx']:
+            tab = self.all_tabs.get(key)
+            if tab is not None and hasattr(tab, 'shutdown'):
+                try:
+                    tab.shutdown()
+                except Exception:
+                    pass
         QApplication.quit()
     
     def _rebuild_stack(self):
         while self.stack.count() > 0:
             widget = self.stack.widget(0)
             self.stack.removeWidget(widget)
+        
         self.stack_tab_indices = {}
         self.tab_map = {}
+        
         all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status', 'fx']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
+        
         for key in visible_keys:
+            if self.all_tabs[key] is None:
+                self.all_tabs[key] = self._create_tab(key)
+            
             idx = self.stack.addWidget(self.all_tabs[key])
             self.stack_tab_indices[key] = idx
             self.tab_map[key] = self.all_tabs[key]
+    
+    def _create_tab(self, key):
+        """Crée un onglet à la demande"""
+        if key == 'settings':
+            return SettingsTab(self.pw)
+        elif key == 'routing':
+            return RoutingTab(self.pw)
+        elif key == 'profiles':
+            return ProfilesTab(self.pw, self.config_mgr)
+        elif key == 'aes67':
+            return Aes67Tab(self.pw)
+        elif key == 'status':
+            return StatusTab(self.pw)
+        elif key == 'fx':
+            return FXTab(self.pw)
+        return None
     
     def _on_nav(self, idx):
         self.stack.setCurrentIndex(idx)
@@ -648,10 +675,13 @@ class MainWindow(QMainWindow):
         behavior = self.ui_config.config.get('close_behavior', 'tray')
         if behavior == 'quit':
             self.audio_tab.shutdown()
-            self.settings_tab.shutdown()
-            self.status_tab.shutdown()
-            self.aes67_tab.shutdown()
-            self.fx_tab.shutdown()
+            for key in ['settings', 'routing', 'profiles', 'aes67', 'status', 'fx']:
+                tab = self.all_tabs.get(key)
+                if tab is not None and hasattr(tab, 'shutdown'):
+                    try:
+                        tab.shutdown()
+                    except Exception:
+                        pass
             event.accept()
             QApplication.quit()
         else:

@@ -71,3 +71,30 @@ THEMES = {
         'tooltip_border': '#555555',
     },
 }
+
+def get_sub_btn_style(colors):
+    """Style pour les boutons de sous-onglets"""
+    return f"""
+        QPushButton {{
+            background-color: {colors['btn_bg']};
+            color: {colors['btn_text']};
+            border: 1px solid {colors['titlebar_bg']};
+            border-radius: 4px;
+            padding: 10px 18px;
+            min-height: 16px;
+            font-size: 13px;
+        }}
+        QPushButton:checked {{
+            background-color: {colors['btn_checked']};
+            color: {colors['btn_text_checked']};
+            border-color: {colors['btn_checked']};
+        }}
+        QPushButton:hover:!checked {{
+            background-color: {colors['btn_hover']};
+            color: {colors['btn_text_hover']};
+        }}
+    """
+
+def get_main_btn_style(colors):
+    """Style pour les boutons d'onglets principaux"""
+    return get_sub_btn_style(colors)

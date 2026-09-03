@@ -20,6 +20,9 @@ class DeviceRow(QWidget):
         self.i18n = I18n.instance()
         self.logger = Logger.instance()
         self._init_ui()
+        
+        # Charger le volume initial
+        self._load_initial_volume()
     
     def _init_ui(self):
         layout = QHBoxLayout()
@@ -38,14 +41,14 @@ class DeviceRow(QWidget):
         
         self.slider = ClickSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(0, 100)
-        self.slider.setValue(100)
+        self.slider.setValue(0)  # Valeur initiale 0, sera mise à jour
         self.slider.setMinimumWidth(100)
         self.slider.setMaximumWidth(800)
         self.slider.valueChanged.connect(self._on_slider_moved)
         self.slider.sliderReleased.connect(self._on_release)
         vol_top.addWidget(self.slider, 1)
         
-        self.vol_label = QLabel("100%")
+        self.vol_label = QLabel("0%")
         self.vol_label.setFont(QFont("Monospace", 9))
         self.vol_label.setFixedWidth(40)
         self.vol_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -56,7 +59,7 @@ class DeviceRow(QWidget):
         info_layout = QHBoxLayout()
         info_layout.setSpacing(0)
         info_layout.setContentsMargins(30, 0, 0, 0)
-        self.info_lbl = QLabel("48000 Hz / S32LE")
+        self.info_lbl = QLabel("")
         self.info_lbl.setFont(QFont("Monospace", 8))
         info_layout.addWidget(self.info_lbl)
         info_layout.addStretch()
@@ -77,6 +80,15 @@ class DeviceRow(QWidget):
         
         layout.addLayout(vol_layout, 1)
         self.setLayout(layout)
+    
+    def _load_initial_volume(self):
+        """Charge le volume initial du périphérique"""
+        try:
+            vol = self.pw.get_volume(self.device['id'])
+            if vol is not None:
+                self.update_volume(vol)
+        except Exception:
+            pass
     
     def set_theme_colors(self, colors):
         """Applique les couleurs du thème"""

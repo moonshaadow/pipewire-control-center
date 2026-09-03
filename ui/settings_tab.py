@@ -10,6 +10,8 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from .i18n import I18n
 from .logger import Logger
+from .themes import get_sub_btn_style
+
 
 class SettingsTab(QWidget):
     """Onglet Réglages avec sous-onglets Fréquences et Buffer"""
@@ -108,7 +110,6 @@ class SettingsTab(QWidget):
         
         self.current_buf_lbl = QLabel()
         self.current_buf_lbl.setFont(QFont("Monospace", 11, QFont.Weight.Bold))
-        self.current_buf_lbl.setStyleSheet("color: white;")
         buf_layout.addWidget(self.current_buf_lbl)
         
         buf_form = QFormLayout()
@@ -134,12 +135,10 @@ class SettingsTab(QWidget):
         
         self.latency_lbl = QLabel()
         self.latency_lbl.setFont(QFont("Monospace", 9))
-        self.latency_lbl.setStyleSheet("color: #aaa;")
         buf_form.addRow(self.i18n.tr('latence_estimee'), self.latency_lbl)
         
         self.rate_lbl = QLabel()
         self.rate_lbl.setFont(QFont("Monospace", 9))
-        self.rate_lbl.setStyleSheet("color: #aaa;")
         buf_form.addRow(self.i18n.tr('frequence'), self.rate_lbl)
         
         buf_layout.addLayout(buf_form)
@@ -190,12 +189,10 @@ class SettingsTab(QWidget):
             self.i18n.tr('description'), "ALSA", self.i18n.tr('channels'), "Total"
         ])
         self.devices_tree.setColumnWidth(0, 200)
-        self.devices_tree.setStyleSheet("QTreeWidget { background-color: #2a2a2a; color: #aaa; }")
         devices_layout.addWidget(self.devices_tree)
         
         note_lbl = QLabel(self.i18n.tr('buffer_note'))
         note_lbl.setFont(QFont("Monospace", 8))
-        note_lbl.setStyleSheet("color: #888;")
         note_lbl.setWordWrap(True)
         devices_layout.addWidget(note_lbl)
         
@@ -218,29 +215,14 @@ class SettingsTab(QWidget):
         self.setLayout(layout)
     
     def set_theme_colors(self, colors):
-        """Applique les couleurs du thème aux sous-onglets"""
-        sub_btn_style = f"""
-            QPushButton {{
-                background-color: {colors['btn_bg']};
-                color: {colors['btn_text']};
-                border: 1px solid {colors['titlebar_bg']};
-                border-radius: 4px;
-                padding: 8px 18px;
-                font-size: 13px;
-                margin: 0 1px;
-            }}
-            QPushButton:checked {{
-                background-color: {colors['btn_checked']};
-                color: {colors['btn_text_checked']};
-                border-color: {colors['btn_checked']};
-            }}
-            QPushButton:hover:!checked {{
-                background-color: {colors['btn_hover']};
-                color: {colors['btn_text_hover']};
-            }}
-        """
+        """Applique les couleurs du thème aux sous-onglets et aux labels"""
+        sub_btn_style = get_sub_btn_style(colors)
         for btn in self.sub_buttons:
             btn.setStyleSheet(sub_btn_style)
+        
+        self.current_buf_lbl.setStyleSheet(f"color: {colors.get('btn_text_checked', '#ffffff')};")
+        self.latency_lbl.setStyleSheet(f"color: {colors.get('btn_text', '#aaaaaa')};")
+        self.rate_lbl.setStyleSheet(f"color: {colors.get('btn_text', '#aaaaaa')};")
     
     def showEvent(self, event):
         super().showEvent(event)

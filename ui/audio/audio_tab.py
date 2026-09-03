@@ -19,6 +19,7 @@ from .mpris import MprisHelper
 from ..icon_utils import get_device_icon_path
 from ..i18n import I18n
 from ..logger import Logger
+from ..themes import get_sub_btn_style
 
 
 class AudioTab(QWidget):
@@ -44,7 +45,7 @@ class AudioTab(QWidget):
         
         self.timer = QTimer()
         self.timer.timeout.connect(self._update)
-        self.timer.start(200)
+        self.timer.start(500)
     
     def _init_ui(self):
         layout = QVBoxLayout()
@@ -233,40 +234,35 @@ class AudioTab(QWidget):
         
         self.empty_lbl = QLabel(self.i18n.tr('aucun_flux'))
         self.empty_lbl.setFont(QFont("Monospace", 9))
-        self.empty_lbl.setStyleSheet("color: #555;")
+        self.empty_lbl.setStyleSheet("color: #555555;")
         self.empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_lbl.hide()
         flux_layout.addWidget(self.empty_lbl)
         
         self.flux_gb.setLayout(flux_layout)
         layout.addWidget(self.flux_gb)
+
+    def showEvent(self, event):
+        """Démarre le timer quand l'onglet devient visible"""
+        super().showEvent(event)
+        self.timer.start(500)
     
+    def hideEvent(self, event):
+        """Arrête le timer quand l'onglet n'est plus visible"""
+        super().hideEvent(event)
+        self.timer.stop()    
+
     def set_theme_colors(self, colors):
         """Applique les couleurs du thème aux sous-onglets et aux rows"""
         self._theme_colors = colors
         
-        sub_btn_style = f"""
-            QPushButton {{
-                background-color: {colors['btn_bg']};
-                color: {colors['btn_text']};
-                border: 1px solid {colors['titlebar_bg']};
-                border-radius: 4px;
-                padding: 8px 18px;
-                font-size: 13px;
-                margin: 0 1px;
-            }}
-            QPushButton:checked {{
-                background-color: {colors['btn_checked']};
-                color: {colors['btn_text_checked']};
-                border-color: {colors['btn_checked']};
-            }}
-            QPushButton:hover:!checked {{
-                background-color: {colors['btn_hover']};
-                color: {colors['btn_text_hover']};
-            }}
-        """
+        sub_btn_style = get_sub_btn_style(colors)
+        
         for btn in self.sub_buttons:
             btn.setStyleSheet(sub_btn_style)
+        
+        # Mettre à jour empty_lbl
+        self.empty_lbl.setStyleSheet(f"color: {colors.get('btn_text', '#555555')};")
         
         # Propager aux rows
         for row in self.device_rows.values():
@@ -661,6 +657,9 @@ class AudioTab(QWidget):
             else:
                 row = DeviceRow(device, self.pw, is_input=is_input)
                 row.volume_changed.connect(lambda did, vol: self.pw.set_volume(did, vol))
+                # Appliquer le thème si disponible
+                if self._theme_colors:
+                    row.set_theme_colors(self._theme_colors)
                 self.logger.debug(f"Nouveau périphérique ajouté: {name}")
             rows[name] = row
             layout.addWidget(row)
