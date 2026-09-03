@@ -7,8 +7,11 @@ from PyQt6.QtWidgets import (
     QDialog, QDialogButtonBox, QFormLayout, QComboBox, QCheckBox,
     QLabel, QToolButton, QApplication
 )
-from PyQt6.QtGui import QPalette, QIcon, QAction, QKeySequence, QShortcut, QFont, QColor
-from PyQt6.QtCore import Qt, QSettings, QTimer
+from PyQt6.QtGui import (
+    QPalette, QIcon, QAction, QKeySequence, QShortcut, QFont, QColor,
+    QPainterPath, QRegion
+)
+from PyQt6.QtCore import Qt, QSettings, QTimer, QRectF
 
 from pipewire_manager import PipeWireManager
 from config_manager import ConfigManager
@@ -61,7 +64,7 @@ class UIConfig:
             'language': 'auto',
             'close_behavior': 'tray',
             'experimental_features': False,
-            'theme': 'auto'  # 'auto', 'gtk_dark', 'gtk_light', 'dark_alt', 'light_alt'
+            'theme': 'auto'
         }
         self.config = self._load()
     
@@ -105,7 +108,6 @@ class UIConfig:
         return self.config['language']
     
     def get_theme(self):
-        """Retourne le thème effectif"""
         theme = self.config.get('theme', 'auto')
         if theme == 'auto':
             bg = _get_gtk_bg()
@@ -135,7 +137,6 @@ class SettingsDialog(QDialog):
         
         form_layout = QFormLayout()
         
-        # Langue
         self.lang_combo = QComboBox()
         self.lang_combo.addItem(self.i18n.tr('lang_auto'), 'auto')
         self.lang_combo.addItem(self.i18n.tr('lang_fr'), 'fr')
@@ -146,7 +147,6 @@ class SettingsDialog(QDialog):
             self.lang_combo.setCurrentIndex(idx)
         form_layout.addRow(self.i18n.tr('language') + ':', self.lang_combo)
         
-        # Thème
         self.theme_combo = QComboBox()
         self.theme_combo.addItem(self.i18n.tr('theme_auto'), 'auto')
         self.theme_combo.addItem(self.i18n.tr('theme_gtk_dark'), 'gtk_dark')
@@ -158,7 +158,6 @@ class SettingsDialog(QDialog):
             self.theme_combo.setCurrentIndex(idx)
         form_layout.addRow(self.i18n.tr('theme') + ':', self.theme_combo)
         
-        # Comportement à la fermeture
         self.close_combo = QComboBox()
         self.close_combo.addItem(self.i18n.tr('close_tray'), 'tray')
         self.close_combo.addItem(self.i18n.tr('close_quit'), 'quit')
@@ -168,13 +167,11 @@ class SettingsDialog(QDialog):
             self.close_combo.setCurrentIndex(idx)
         form_layout.addRow(self.i18n.tr('close_behavior') + ':', self.close_combo)
         
-        # Fonctionnalités expérimentales
         self.experimental_cb = QCheckBox(self.i18n.tr('enable_experimental'))
         self.experimental_cb.setChecked(ui_config.config.get('experimental_features', False))
         self.experimental_cb.toggled.connect(self._on_experimental_toggled)
         form_layout.addRow('', self.experimental_cb)
         
-        # Avertissement
         self.experimental_warning = QLabel(self.i18n.tr('experimental_warning'))
         self.experimental_warning.setFont(QFont("Monospace", 8))
         self.experimental_warning.setStyleSheet("color: #ff9800;")
@@ -182,7 +179,6 @@ class SettingsDialog(QDialog):
         self.experimental_warning.setVisible(ui_config.config.get('experimental_features', False))
         form_layout.addRow('', self.experimental_warning)
         
-        # Onglets visibles
         tab_keys = [
             ('settings', 'Réglages / Settings'),
             ('routing', 'Routing (expérimental)'),
@@ -201,7 +197,6 @@ class SettingsDialog(QDialog):
         for key, label in tab_keys:
             cb = QCheckBox(label)
             is_experimental = key in ('routing', 'fx')
-            
             if is_experimental:
                 cb.setChecked(ui_config.config['visible_tabs'].get(key, False))
                 cb.setEnabled(experimental_enabled)
@@ -209,13 +204,11 @@ class SettingsDialog(QDialog):
             else:
                 cb.setChecked(ui_config.config['visible_tabs'].get(key, True))
                 cb.setEnabled(True)
-            
             self.tab_checkboxes[key] = cb
             form_layout.addRow('', cb)
         
         layout.addLayout(form_layout)
         
-        # Boutons
         button_box = QDialogButtonBox()
         save_btn = button_box.addButton(self.i18n.tr('save'), QDialogButtonBox.ButtonRole.AcceptRole)
         cancel_btn = button_box.addButton(self.i18n.tr('cancel'), QDialogButtonBox.ButtonRole.RejectRole)
@@ -242,10 +235,8 @@ class SettingsDialog(QDialog):
         self.ui_config.config['theme'] = self.theme_combo.currentData()
         self.ui_config.config['close_behavior'] = self.close_combo.currentData()
         self.ui_config.config['experimental_features'] = self.experimental_cb.isChecked()
-        
         for key, cb in self.tab_checkboxes.items():
             self.ui_config.config['visible_tabs'][key] = cb.isChecked()
-        
         if self.ui_config.save():
             self.accept()
         else:
@@ -285,22 +276,17 @@ class MainWindow(QMainWindow):
         self.lang = self.i18n.get_lang()
         self.logger = Logger.instance()
         
-        # Fenêtre sans barre de titre système
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        
         self.setWindowTitle(self.i18n.tr('title'))
         self.setMinimumSize(700, 500)
         
-        # Attributs pour le déplacement et redimensionnement
         self._drag_pos = None
-        self._resize_dir = None
         
         central = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # Barre de navigation avec contrôles de fenêtre intégrés
         self._create_navigation_bar(layout)
         
         wrapper = QWidget()
@@ -346,100 +332,84 @@ class MainWindow(QMainWindow):
         
         self._restore_geometry()
         self._install_shortcuts()
+        
+        # Appliquer le thème après création des onglets
+        self._apply_theme()
+        
+        # Arrondir les angles
+        self._apply_rounded_corners(12)
+    
+    def _apply_rounded_corners(self, radius=12):
+        rectf = QRectF(self.rect())
+        path = QPainterPath()
+        path.addRoundedRect(rectf, radius, radius)
+        region = QRegion(path.toFillPolygon().toPolygon())
+        self.setMask(region)
+    
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'windowHandle') and self.windowHandle():
+            self._apply_rounded_corners(12)
     
     def _get_theme_colors(self):
         """Retourne les couleurs selon le thème"""
+        from .themes import THEMES
+        
         theme = self.ui_config.get_theme()
-        bg = _get_gtk_bg() or '#2a2a2a'
-        dark = _is_dark(bg)
         
         if theme == 'gtk_dark':
-            # Thème GTK sombre (comme avant)
-            titlebar_bg = _darken(bg, 0.75)
-            return {
-                'titlebar_bg': titlebar_bg,
-                'btn_bg': bg,
-                'btn_checked': _darken(bg, 0.55),
-                'btn_hover': _lighten(bg, 1.15),
-                'btn_text': '#999',
-                'btn_text_checked': '#fff',
-                'btn_text_hover': '#ddd',
-                'window_bg': bg,
-                'window_text': '#ccc'
-            }
-        elif theme == 'gtk_light':
-            # Thème GTK clair (comme avant)
-            titlebar_bg = _darken(bg, 0.85)
-            return {
-                'titlebar_bg': titlebar_bg,
-                'btn_bg': bg,
-                'btn_checked': _darken(bg, 0.7),
-                'btn_hover': _lighten(bg, 1.05),
-                'btn_text': '#666',
-                'btn_text_checked': '#000',
-                'btn_text_hover': '#333',
-                'window_bg': bg,
-                'window_text': '#333'
-            }
-        elif theme == 'dark_alt':
-            # Thème sombre alternatif (plus doux)
-            return {
-                'titlebar_bg': '#3a3a3e',
-                'btn_bg': '#4a4a4e',
-                'btn_checked': '#5a5a5e',
-                'btn_hover': '#6a6a6e',
-                'btn_text': '#aaa',
-                'btn_text_checked': '#fff',
-                'btn_text_hover': '#ddd',
-                'window_bg': '#3a3a3e',
-                'window_text': '#ddd'
-            }
-        else:
-            # Fallback auto
-            if dark:
-                titlebar_bg = _darken(bg, 0.75)
-                return {
-                    'titlebar_bg': titlebar_bg,
-                    'btn_bg': bg,
-                    'btn_checked': _darken(bg, 0.55),
-                    'btn_hover': _lighten(bg, 1.15),
-                    'btn_text': '#999',
-                    'btn_text_checked': '#fff',
-                    'btn_text_hover': '#ddd',
-                    'window_bg': bg,
-                    'window_text': '#ccc'
-                }
-            else:
-                titlebar_bg = _darken(bg, 0.85)
-                return {
-                    'titlebar_bg': titlebar_bg,
-                    'btn_bg': bg,
-                    'btn_checked': _darken(bg, 0.7),
-                    'btn_hover': _lighten(bg, 1.05),
-                    'btn_text': '#666',
-                    'btn_text_checked': '#000',
-                    'btn_text_hover': '#333',
-                    'window_bg': bg,
-                    'window_text': '#333'
-                }
+            bg = _get_gtk_bg() or '#2a2a2a'
+            colors = THEMES['gtk_dark'].copy()
+            colors['titlebar_bg'] = _darken(bg, 0.75)
+            colors['btn_bg'] = bg
+            colors['btn_checked'] = _darken(bg, 0.55)
+            colors['btn_hover'] = _lighten(bg, 1.15)
+            colors['window_bg'] = bg
+            return colors
+        
+        if theme in THEMES:
+            return THEMES[theme].copy()
+        
+        # Fallback
+        return THEMES['dark_alt'].copy()
     
     def _apply_theme(self):
-        """Applique le thème"""
+        """Applique le thème à tous les widgets"""
         colors = self._get_theme_colors()
+        
+        tooltip_bg = colors.get('tooltip_bg', '#2a2a2a')
+        tooltip_text = colors.get('tooltip_text', '#ffffff')
+        tooltip_border = colors.get('tooltip_border', '#555555')
         
         self.setStyleSheet(f"""
             QMainWindow, QWidget {{ background-color: {colors['window_bg']}; color: {colors['window_text']}; }}
             QToolTip {{
-                background-color: #2a2a2a;
-                color: #ffffff;
-                border: 1px solid #555;
+                background-color: {tooltip_bg};
+                color: {tooltip_text};
+                border: 1px solid {tooltip_border};
                 padding: 4px 8px;
                 font-size: 12px;
             }}
         """)
+        
+        self._apply_theme_to_tabs()
+        for tab in self.all_tabs.values():
+            if hasattr(tab, 'refresh_language'):
+                try:
+                    tab.refresh_language()
+                except Exception:
+                    pass
+    
+    def _apply_theme_to_tabs(self):
+        colors = self._get_theme_colors()
+        for tab in self.all_tabs.values():
+            if hasattr(tab, 'set_theme_colors'):
+                try:
+                    tab.set_theme_colors(colors)
+                except Exception:
+                    pass
     
     def _create_navigation_bar(self, layout):
-        """Crée la barre de navigation avec contrôles de fenêtre intégrés"""
         colors = self._get_theme_colors()
         
         nav = QWidget()
@@ -448,7 +418,6 @@ class MainWindow(QMainWindow):
         nav_layout.setContentsMargins(4, 12, 4, 12)
         nav_layout.setSpacing(2)
         
-        # Titre à gauche sur 3 lignes
         self.title_lbl = QLabel("PipeWire\nControl\nCenter")
         self.title_lbl.setStyleSheet(f"""
             color: {colors['btn_text_checked']};
@@ -501,7 +470,6 @@ class MainWindow(QMainWindow):
         
         nav_layout.addStretch(1)
         
-        # Bouton de configuration
         settings_btn = QToolButton()
         settings_btn.setText('⋮')
         settings_btn.setToolTip(self.i18n.tr('settings_tooltip'))
@@ -523,7 +491,6 @@ class MainWindow(QMainWindow):
         settings_btn.clicked.connect(self._open_settings)
         nav_layout.addWidget(settings_btn)
         
-        # Bouton minimiser
         min_btn = QToolButton()
         min_btn.setText("─")
         min_btn.setToolTip("Minimiser")
@@ -543,7 +510,6 @@ class MainWindow(QMainWindow):
         min_btn.clicked.connect(self.showMinimized)
         nav_layout.addWidget(min_btn)
         
-        # Bouton fermer
         close_btn = QToolButton()
         close_btn.setText("✕")
         close_btn.setToolTip("Fermer")
@@ -565,68 +531,16 @@ class MainWindow(QMainWindow):
         
         nav.setLayout(nav_layout)
         layout.addWidget(nav)
-        
         self.nav_widget = nav
     
-    # --- Déplacement et redimensionnement ---
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            pos = event.position()
-            margin = 5
-            rect = self.rect()
-            
-            self._resize_dir = None
-            if pos.x() < margin:
-                self._resize_dir = 'left'
-            elif pos.x() > rect.width() - margin:
-                self._resize_dir = 'right'
-            if pos.y() < margin:
-                self._resize_dir = ('top' if not self._resize_dir else self._resize_dir + '_top')
-            elif pos.y() > rect.height() - margin:
-                self._resize_dir = ('bottom' if not self._resize_dir else self._resize_dir + '_bottom')
-            
-            if self._resize_dir:
-                self._drag_pos = event.globalPosition().toPoint()
+            if event.position().y() < 40:
+                self.windowHandle().startSystemMove()
                 event.accept()
                 return
-            
-            # Déplacement depuis la barre de navigation
-            if pos.y() < 40:
-                self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-                event.accept()
+        super().mousePressEvent(event)
     
-    def mouseMoveEvent(self, event):
-        if event.buttons() & Qt.MouseButton.LeftButton and self._drag_pos is not None:
-            if self._resize_dir:
-                self._do_resize(event)
-            else:
-                self.move(event.globalPosition().toPoint() - self._drag_pos)
-            event.accept()
-    
-    def mouseReleaseEvent(self, event):
-        self._drag_pos = None
-        self._resize_dir = None
-        event.accept()
-    
-    def _do_resize(self, event):
-        pos = event.globalPosition().toPoint()
-        delta = pos - self._drag_pos
-        geo = self.geometry()
-        
-        if 'left' in self._resize_dir:
-            geo.setLeft(geo.left() + delta.x())
-        elif 'right' in self._resize_dir:
-            geo.setRight(geo.right() + delta.x())
-        if 'top' in self._resize_dir:
-            geo.setTop(geo.top() + delta.y())
-        elif 'bottom' in self._resize_dir:
-            geo.setBottom(geo.bottom() + delta.y())
-        
-        if geo.width() >= self.minimumWidth() and geo.height() >= self.minimumHeight():
-            self.setGeometry(geo)
-            self._drag_pos = pos
-    
-    # --- Reste des méthodes ---
     def _restore_geometry(self):
         settings = QSettings('PipeWireControlCenter', 'MainWindow')
         geometry = settings.value('geometry')
@@ -643,13 +557,10 @@ class MainWindow(QMainWindow):
         for i in range(1, 8):
             shortcut = QShortcut(QKeySequence(f"Ctrl+{i}"), self)
             shortcut.activated.connect(lambda idx=i-1: self._goto_tab(idx))
-        
         refresh_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
         refresh_shortcut.activated.connect(self._refresh_current_tab)
-        
         f5_shortcut = QShortcut(QKeySequence("F5"), self)
         f5_shortcut.activated.connect(self._refresh_all)
-        
         quit_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
         quit_shortcut.activated.connect(self._quit_app)
     
@@ -697,13 +608,10 @@ class MainWindow(QMainWindow):
         while self.stack.count() > 0:
             widget = self.stack.widget(0)
             self.stack.removeWidget(widget)
-        
         self.stack_tab_indices = {}
         self.tab_map = {}
-        
         all_tab_keys = ['output', 'settings', 'routing', 'profiles', 'aes67', 'status', 'fx']
         visible_keys = [k for k in all_tab_keys if self.ui_config.is_tab_visible(k)]
-        
         for key in visible_keys:
             idx = self.stack.addWidget(self.all_tabs[key])
             self.stack_tab_indices[key] = idx
@@ -719,36 +627,25 @@ class MainWindow(QMainWindow):
             self.lang = self.i18n.get_lang()
             self.setWindowTitle(self.i18n.tr('title'))
             self.statusBar().showMessage(self.i18n.tr('ui_config_saved'), 3000)
-            
-            # Appliquer le thème
             self._apply_theme()
-            
-            # Reconstruire la navigation
             self._rebuild_navigation()
             self._rebuild_stack()
             self._install_shortcuts()
+            self._apply_rounded_corners(12)
     
     def _rebuild_navigation(self):
-        # Supprimer l'ancienne navigation
         if hasattr(self, 'nav_widget') and self.nav_widget:
             self.nav_widget.deleteLater()
-        
-        # Recréer la navigation
         layout = self.centralWidget().layout()
         self._create_navigation_bar(layout)
-        
-        # Insérer au bon endroit
         layout.insertWidget(0, self.nav_widget)
-        
         if self.buttons:
             self.buttons[0].setChecked(True)
         self.btn_group.idClicked.connect(self._on_nav)
     
     def closeEvent(self, event):
         self._save_geometry()
-        
         behavior = self.ui_config.config.get('close_behavior', 'tray')
-        
         if behavior == 'quit':
             self.audio_tab.shutdown()
             self.settings_tab.shutdown()

@@ -48,30 +48,32 @@ class DevicePickerDialog(QDialog):
             default_badge.setStyleSheet("""
                 QFrame {
                     background-color: #2E7D32;
-                    border: 2px solid #4CAF50;
+                    border: none;
                     border-radius: 8px;
                 }
                 QFrame:hover {
                     background-color: #388E3C;
-                    border: 2px solid #66BB6A;
+                    border: none;
                 }
                 QFrame QLabel {
                     color: white;
+                    background: transparent;
                 }
             """)
         else:
             default_badge.setStyleSheet("""
                 QFrame {
                     background-color: #2a2a2a;
-                    border: 1px solid #444444;
+                    border: none;
                     border-radius: 8px;
                 }
                 QFrame:hover {
                     background-color: #333333;
-                    border: 1px solid #666666;
+                    border: none;
                 }
                 QFrame QLabel {
                     color: #cccccc;
+                    background: transparent;
                 }
             """)
         default_badge.clicked.connect(self._on_default_selected)
@@ -96,30 +98,32 @@ class DevicePickerDialog(QDialog):
                 badge.setStyleSheet("""
                     QFrame {
                         background-color: #1565C0;
-                        border: 2px solid #1E88E5;
+                        border: none;
                         border-radius: 8px;
                     }
                     QFrame:hover {
                         background-color: #1976D2;
-                        border: 2px solid #42A5F5;
+                        border: none;
                     }
                     QFrame QLabel {
                         color: white;
+                        background: transparent;
                     }
                 """)
             else:
                 badge.setStyleSheet("""
                     QFrame {
                         background-color: #2a2a2a;
-                        border: 1px solid #444444;
+                        border: none;
                         border-radius: 8px;
                     }
                     QFrame:hover {
                         background-color: #333333;
-                        border: 1px solid #666666;
+                        border: none;
                     }
                     QFrame QLabel {
                         color: #cccccc;
+                        background: transparent;
                     }
                 """)
             

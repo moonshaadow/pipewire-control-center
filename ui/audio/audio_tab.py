@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSettings
 from PyQt6.QtGui import QFont, QIcon, QAction, QColor
+from .widgets import DeviceCard
 from .device_row import DeviceRow
 from .stream_row import StreamRow
 from .device_picker import DevicePickerDialog
@@ -36,6 +37,7 @@ class AudioTab(QWidget):
         self.selected_input = None
         self._prev_device_names = set()
         self._desktop_names_cache = {}
+        self._theme_colors = None 
         self._init_ui()
         self.refresh_devices()
         self._refresh_devices_table()
@@ -64,30 +66,9 @@ class AudioTab(QWidget):
             (self.i18n.tr('devices'), 2)
         ]
         
-        sub_btn_style = """
-            QPushButton {
-                background-color: palette(window);
-                color: #999999;
-                border: 1px solid #222226;
-                border-radius: 4px;
-                padding: 8px 18px;
-                font-size: 13px;
-                margin: 0 1px;
-            }
-            QPushButton:checked {
-                background-color: #1a1a1e;
-                color: #ffffff;
-            }
-            QPushButton:hover:!checked {
-                background-color: #3a3a3a;
-                color: #dddddd;
-            }
-        """
-        
         for text, idx in sub_pages:
             btn = QPushButton(text)
             btn.setCheckable(True)
-            btn.setStyleSheet(sub_btn_style)
             self.sub_btn_group.addButton(btn, idx)
             sub_nav_layout.addWidget(btn)
             self.sub_buttons.append(btn)
@@ -260,6 +241,41 @@ class AudioTab(QWidget):
         self.flux_gb.setLayout(flux_layout)
         layout.addWidget(self.flux_gb)
     
+    def set_theme_colors(self, colors):
+        """Applique les couleurs du thème aux sous-onglets et aux rows"""
+        self._theme_colors = colors
+        
+        sub_btn_style = f"""
+            QPushButton {{
+                background-color: {colors['btn_bg']};
+                color: {colors['btn_text']};
+                border: 1px solid {colors['titlebar_bg']};
+                border-radius: 4px;
+                padding: 8px 18px;
+                font-size: 13px;
+                margin: 0 1px;
+            }}
+            QPushButton:checked {{
+                background-color: {colors['btn_checked']};
+                color: {colors['btn_text_checked']};
+                border-color: {colors['btn_checked']};
+            }}
+            QPushButton:hover:!checked {{
+                background-color: {colors['btn_hover']};
+                color: {colors['btn_text_hover']};
+            }}
+        """
+        for btn in self.sub_buttons:
+            btn.setStyleSheet(sub_btn_style)
+        
+        # Propager aux rows
+        for row in self.device_rows.values():
+            row.set_theme_colors(colors)
+        for row in self.input_rows.values():
+            row.set_theme_colors(colors)
+        for row in self.stream_rows.values():
+            row.set_theme_colors(colors)
+    
     def _on_sub_nav(self, idx):
         self.sub_stack.setCurrentIndex(idx)
         if idx == 2:
@@ -290,7 +306,6 @@ class AudioTab(QWidget):
             self.logger.error(f"Erreur sauvegarde colonnes: {e}")
     
     def _get_stream_target(self, stream_id):
-        """Récupère le target.object du flux via pw-metadata"""
         try:
             result = subprocess.run(
                 ['pw-metadata', str(stream_id), 'target.object'],
@@ -307,7 +322,6 @@ class AudioTab(QWidget):
     def _get_desktop_name(self, binary):
         if binary in self._desktop_names_cache:
             return self._desktop_names_cache[binary]
-        
         try:
             desktop_dirs = [
                 '/usr/share/applications',
@@ -315,7 +329,6 @@ class AudioTab(QWidget):
                 '/var/lib/flatpak/exports/share/applications',
                 os.path.expanduser('~/.local/share/flatpak/exports/share/applications')
             ]
-            
             for d in desktop_dirs:
                 if not os.path.exists(d):
                     continue
@@ -335,7 +348,6 @@ class AudioTab(QWidget):
                             continue
         except Exception:
             pass
-        
         self._desktop_names_cache[binary] = None
         return None
     
@@ -376,7 +388,7 @@ class AudioTab(QWidget):
                 range_str
             ])
             
-            icon_path = get_device_icon_path(dev)
+            icon_path = get_device_icon_path(dev, self._theme_colors)
             if icon_path and os.path.exists(icon_path):
                 item.setIcon(1, QIcon(icon_path))
             
@@ -853,11 +865,9 @@ class AudioTab(QWidget):
                         stream_data.update(mpris_meta)
                         break
             
-            # Récupérer le target.object du flux
             linked_device_name = self._get_stream_target(sid)
             stream_data['follows_default'] = (not linked_device_name or linked_device_name == '')
             
-            # Trouver le périphérique lié réel
             if linked_device_name:
                 for dev in output_devices.values():
                     if dev['name'] == linked_device_name:
@@ -898,6 +908,9 @@ class AudioTab(QWidget):
                 self.streams_layout.addWidget(row)
                 if 'device' in stream_data:
                     row.set_device_badge(stream_data['device'])
+                # Appliquer les couleurs du thème si disponibles
+                if self._theme_colors:
+                    row.set_theme_colors(self._theme_colors)
                 self.logger.debug(f"Nouveau flux audio: {display_name} (binaire: {binary})")
         
         for sid in list(self.stream_rows):
@@ -916,9 +929,7 @@ class AudioTab(QWidget):
         self.streams_scroll.setVisible(bool(self.stream_rows))
     
     def _on_device_change_requested(self, stream_data):
-        """Affiche le dialog de sélection de périphérique"""
         available_devices = [d for d in self.pw.get_devices() if d['type'] == 'sortie']
-        
         current_device = self._get_stream_target(stream_data['id'])
         
         dialog = DevicePickerDialog(
@@ -935,7 +946,6 @@ class AudioTab(QWidget):
                 self._route_stream_now(stream_data['id'], dialog.selected_device['name'])
     
     def _route_stream_now(self, stream_id, device_name):
-        """Route immédiatement un flux vers un périphérique"""
         try:
             result = subprocess.run(
                 ['pw-metadata', str(stream_id), 'target.object', device_name],
@@ -965,7 +975,6 @@ class AudioTab(QWidget):
             self.logger.error(f"Erreur routing flux: {e}")
     
     def _route_stream_to_default(self, stream_id):
-        """Retour au périphérique par défaut"""
         try:
             result = subprocess.run(
                 ['pw-metadata', str(stream_id), 'target.object', ''],

@@ -42,6 +42,8 @@ class DeviceCard(QFrame):
         self.device = device
         self.i18n = I18n.instance()
         self.logger = Logger.instance()
+        self._colors = None
+        self.is_selected = is_selected
         self.setProperty("selected", is_selected)
         self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -49,19 +51,12 @@ class DeviceCard(QFrame):
         self.setMaximumSize(200, 95)
         
         layout = QVBoxLayout()
-        layout.setSpacing(4)
+        layout.setSpacing(0)
         layout.setContentsMargins(10, 8, 10, 8)
         
-        icon_path = get_device_icon_path(device)
         self.icon_lbl = QLabel()
-        if os.path.exists(icon_path):
-            pixmap = QPixmap(icon_path)
-            pixmap = pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            self.icon_lbl.setPixmap(pixmap)
-        else:
-            self.icon_lbl.setText("🔊")
-            self.icon_lbl.setFont(QFont("Monospace", 20))
         self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(self.icon_lbl)
         
         self.name_lbl = QLabel(device.get('description', 'Inconnu')[:40])
@@ -69,42 +64,82 @@ class DeviceCard(QFrame):
         self.name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.name_lbl.setWordWrap(True)
         self.name_lbl.setMaximumWidth(180)
+        self.name_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(self.name_lbl)
         
         if device.get('state') == 'running':
             badge = QLabel("● " + self.i18n.tr('active'))
             badge.setFont(QFont("Monospace", 6))
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            badge.setStyleSheet("color: #4CAF50;")
+            badge.setStyleSheet("color: #4CAF50; background: transparent;")
+            badge.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             layout.addWidget(badge)
         
         self.setLayout(layout)
-        self.setStyleSheet("""
-            DeviceCard[selected="true"] {
-                background-color: #1565C0;
-                border: 2px solid #1E88E5;
+        self._load_icon()
+        self._apply_style()
+    
+    def _load_icon(self):
+        """Charge l'icône selon le thème actuel"""
+        icon_path = get_device_icon_path(self.device, self._colors)
+        if os.path.exists(icon_path):
+            pixmap = QPixmap(icon_path)
+            pixmap = pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.icon_lbl.setPixmap(pixmap)
+        else:
+            self.icon_lbl.setText("🔊")
+            self.icon_lbl.setFont(QFont("Monospace", 20))
+    
+    def _apply_style(self):
+        """Applique le style selon l'état sélectionné"""
+        c = self._colors if self._colors else {}
+        
+        if self.is_selected:
+            bg = c.get('device_card_selected_bg', c.get('btn_checked', '#1565C0'))
+            border = c.get('device_card_selected_border', c.get('btn_hover', '#1E88E5'))
+            text = c.get('device_card_selected_text', c.get('btn_text_checked', '#ffffff'))
+            border_width = '2px'
+        else:
+            bg = c.get('device_card_normal_bg', c.get('btn_bg', '#2a2a2a'))
+            border = c.get('device_card_normal_border', c.get('border', '#444444'))
+            text = c.get('device_card_normal_text', c.get('btn_text', '#cccccc'))
+            border_width = '1px'
+        
+        # Pas de changement au survol pour la carte sélectionnée
+        if self.is_selected:
+            hover_style = ""
+        else:
+            hover_style = f"""
+            DeviceCard:hover {{
+                background-color: {c.get('btn_hover', '#333333')};
+                border: 1px solid {c.get('btn_text_hover', '#666666')};
+            }}
+            """
+        
+        self.setStyleSheet(f"""
+            DeviceCard {{
+                background-color: {bg};
+                border: {border_width} solid {border};
                 border-radius: 8px;
-            }
-            DeviceCard[selected="true"] QLabel {
-                color: white;
-            }
-            DeviceCard[selected="false"] {
-                background-color: #2a2a2a;
-                border: 1px solid #444444;
-                border-radius: 8px;
-            }
-            DeviceCard[selected="false"] QLabel {
-                color: #cccccc;
-            }
-            DeviceCard[selected="false"]:hover {
-                background-color: #333333;
-                border: 1px solid #666666;
-            }
+            }}
+            {hover_style}
+            DeviceCard QLabel {{
+                color: {text};
+                background: transparent;
+            }}
         """)
     
+    def set_theme_colors(self, colors):
+        """Applique les couleurs du thème et recharge l'icône"""
+        self._colors = colors
+        self._load_icon()
+        self._apply_style()
+    
     def set_selected(self, selected):
+        """Change l'état sélectionné et réapplique le style"""
         self.is_selected = selected
         self.setProperty("selected", selected)
+        self._apply_style()
         self.style().unpolish(self)
         self.style().polish(self)
         self.update()
@@ -120,6 +155,7 @@ class StreamDeviceBadge(QFrame):
     def __init__(self, device, parent=None):
         super().__init__(parent)
         self.device = device
+        self._colors = None
         self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedSize(56, 56)
@@ -127,11 +163,27 @@ class StreamDeviceBadge(QFrame):
         self.setToolTip(device.get('description', ''))
         
         layout = QVBoxLayout()
-        layout.setSpacing(1)
+        layout.setSpacing(0)
         layout.setContentsMargins(3, 3, 3, 3)
         
-        icon_path = get_device_icon_path(device)
         self.icon_lbl = QLabel()
+        self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout.addWidget(self.icon_lbl)
+        
+        self.name_lbl = QLabel(device.get('description', '')[:12])
+        self.name_lbl.setFont(QFont("Sans", 6, QFont.Weight.Medium))
+        self.name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.name_lbl.setWordWrap(True)
+        self.name_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout.addWidget(self.name_lbl)
+        
+        self.setLayout(layout)
+        self._load_icon()
+    
+    def _load_icon(self):
+        """Charge l'icône selon le thème actuel"""
+        icon_path = get_device_icon_path(self.device, self._colors)
         if os.path.exists(icon_path):
             pixmap = QPixmap(icon_path)
             pixmap = pixmap.scaled(22, 22, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
@@ -139,16 +191,27 @@ class StreamDeviceBadge(QFrame):
         else:
             self.icon_lbl.setText("🔊")
             self.icon_lbl.setFont(QFont("Monospace", 10))
-        self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.icon_lbl)
-        
-        self.name_lbl = QLabel(device.get('description', '')[:12])
-        self.name_lbl.setFont(QFont("Sans", 6, QFont.Weight.Medium))
-        self.name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.name_lbl.setWordWrap(True)
-        layout.addWidget(self.name_lbl)
-        
-        self.setLayout(layout)
+    
+    def set_theme_colors(self, colors):
+        """Applique les couleurs du thème et recharge l'icône"""
+        self._colors = colors
+        c = colors
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {c.get('btn_checked', '#1565C0')};
+                border: none;
+                border-radius: 8px;
+            }}
+            QFrame:hover {{
+                background-color: {c.get('btn_hover', '#1976D2')};
+                border: none;
+            }}
+            QFrame QLabel {{
+                color: {c.get('btn_text_checked', '#ffffff')};
+                background: transparent;
+            }}
+        """)
+        self._load_icon()
     
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:

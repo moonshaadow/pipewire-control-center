@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""Définition des thèmes de l'interface"""
+
+THEMES = {
+    'gtk_dark': {
+        # Calculé dynamiquement depuis GTK
+        'titlebar_bg': None,
+        'btn_bg': None,
+        'btn_checked': None,
+        'btn_hover': None,
+        'window_bg': None,
+        # Couleurs fixes
+        'btn_text': '#999999',
+        'btn_text_checked': '#ffffff',
+        'btn_text_hover': '#dddddd',
+        'window_text': '#cccccc',
+        'border': '#555555',
+        # DeviceCard
+        'device_card_selected_bg': '#1565C0',
+        'device_card_selected_border': '#1E88E5',
+        'device_card_normal_bg': '#222226',
+        'device_card_normal_border': '#444444',
+        'device_card_selected_text': '#ffffff',
+        'device_card_normal_text': '#cccccc',
+        'tooltip_bg': '#2a2a2a',
+        'tooltip_text': '#ffffff',
+        'tooltip_border': '#555555',
+    },
+    'gtk_light': {
+        'titlebar_bg': '#d5d5d5',
+        'btn_bg': '#e8e8e8',
+        'btn_checked': '#cccccc',
+        'btn_hover': '#f0f0f0',
+        'btn_text': '#555555',
+        'btn_text_checked': '#000000',
+        'btn_text_hover': '#333333',
+        'window_bg': '#f0f0f0',
+        'window_text': '#333333',
+        'border': '#cccccc',
+        # DeviceCard
+        'device_card_selected_bg': '#6f99c0',
+        'device_card_selected_border': '#1E88E5',
+        'device_card_normal_bg': '#e8e8e8',
+        'device_card_normal_border': '#cccccc',
+        'device_card_selected_text': '#000000',
+        'device_card_normal_text': '#555555',
+        'tooltip_bg': '#ffffff',
+        'tooltip_text': '#333333',
+        'tooltip_border': '#999999',
+    },
+    'dark_alt': {
+        'titlebar_bg': '#3a3a3e',
+        'btn_bg': '#4a4a4e',
+        'btn_checked': '#5a5a5e',
+        'btn_hover': '#6a6a6e',
+        'btn_text': '#aaaaaa',
+        'btn_text_checked': '#ffffff',
+        'btn_text_hover': '#dddddd',
+        'window_bg': '#3a3a3e',
+        'window_text': '#dddddd',
+        'border': '#555555',
+        # DeviceCard
+        'device_card_selected_bg': '#6c64d0',
+        'device_card_selected_border': '#2c2c2f',
+        'device_card_normal_bg': '#4a4a4e',
+        'device_card_normal_border': '#3a3a3e',
+        'device_card_selected_text': '#ffffff',
+        'device_card_normal_text': '#aaaaaa',
+        'tooltip_bg': '#3a3a3e',
+        'tooltip_text': '#ffffff',
+        'tooltip_border': '#555555',
+    },
+}

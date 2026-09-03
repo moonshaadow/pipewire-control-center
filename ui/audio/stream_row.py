@@ -22,8 +22,8 @@ class StreamRow(QFrame):
         self.i18n = I18n.instance()
         self.logger = Logger.instance()
         self.device_badge = None
+        self._colors = None
         self.setFrameStyle(QFrame.Shape.NoFrame)
-        self.setStyleSheet("background-color: #2a2a2a; border-radius: 4px; margin: 1px 0;")
         self.setMinimumHeight(64)
         self.setMaximumHeight(64)
         
@@ -43,12 +43,10 @@ class StreamRow(QFrame):
         
         self.name_lbl = QLabel(stream.get('name', '')[:30])
         self.name_lbl.setFont(QFont("Monospace", 8))
-        self.name_lbl.setStyleSheet("color: #aaaaaa;")
         text_layout.addWidget(self.name_lbl)
         
         self.meta_lbl = QLabel("")
         self.meta_lbl.setFont(QFont("Monospace", 7))
-        self.meta_lbl.setStyleSheet("color: #666;")
         self.meta_lbl.setVisible(False)
         text_layout.addWidget(self.meta_lbl)
         
@@ -56,7 +54,6 @@ class StreamRow(QFrame):
         
         self.rate_lbl = QLabel("?")
         self.rate_lbl.setFont(QFont("Monospace", 7))
-        self.rate_lbl.setStyleSheet("color: #888888;")
         self.rate_lbl.setFixedWidth(55)
         self.rate_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.rate_lbl)
@@ -72,13 +69,24 @@ class StreamRow(QFrame):
         
         self.vol_lbl = QLabel("100%")
         self.vol_lbl.setFont(QFont("Monospace", 7))
-        self.vol_lbl.setStyleSheet("color: #888888;")
         self.vol_lbl.setFixedWidth(35)
         self.vol_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         layout.addWidget(self.vol_lbl, alignment=Qt.AlignmentFlag.AlignVCenter)
         
         self.setLayout(layout)
         self._update_metadata()
+    
+    def set_theme_colors(self, colors):
+        """Applique les couleurs du thème"""
+        self._colors = colors
+        c = colors
+        self.setStyleSheet(f"background-color: {c.get('btn_bg', '#2a2a2a')}; border-radius: 4px; margin: 1px 0;")
+        self.name_lbl.setStyleSheet(f"color: {c.get('btn_text', '#aaaaaa')};")
+        self.meta_lbl.setStyleSheet(f"color: {c.get('btn_text', '#666666')};")
+        self.rate_lbl.setStyleSheet(f"color: {c.get('btn_text', '#888888')};")
+        self.vol_lbl.setStyleSheet(f"color: {c.get('btn_text', '#888888')};")
+        if self.device_badge:
+            self.device_badge.set_theme_colors(colors)
     
     def _update_icon(self):
         icon_name = self.stream.get('icon_name', '')
@@ -120,15 +128,16 @@ class StreamRow(QFrame):
             self.device_badge.setFixedSize(56, 56)
             self.device_badge.clicked.connect(lambda: self.device_change_requested.emit(self.stream))
             self.layout().addWidget(self.device_badge)
+            # Appliquer les couleurs du thème si disponibles
+            if self._colors:
+                self.device_badge.set_theme_colors(self._colors)
         else:
             self.device_badge.device = device
             self.device_badge.setToolTip(device.get('description', ''))
             self.device_badge.name_lbl.setText(device.get('description', '')[:12])
-            icon_path = get_device_icon_path(device)
-            if os.path.exists(icon_path):
-                pixmap = QPixmap(icon_path)
-                pixmap = pixmap.scaled(22, 22, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                self.device_badge.icon_lbl.setPixmap(pixmap)
+            # Recharger l'icône avec les couleurs actuelles
+            self.device_badge._colors = self._colors
+            self.device_badge._load_icon()
     
     def update_stream(self, stream):
         self.stream = stream

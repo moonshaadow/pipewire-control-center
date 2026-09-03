@@ -41,30 +41,9 @@ class SettingsTab(QWidget):
             (self.i18n.tr('buffer'), 1)
         ]
         
-        sub_btn_style = """
-            QPushButton {
-                background-color: palette(window);
-                color: #999999;
-                border: 1px solid #222226;
-                border-radius: 4px;
-                padding: 8px 18px;
-                font-size: 13px;
-                margin: 0 1px;
-            }
-            QPushButton:checked {
-                background-color: #1a1a1e;
-                color: #ffffff;
-            }
-            QPushButton:hover:!checked {
-                background-color: #3a3a3a;
-                color: #dddddd;
-            }
-        """
-        
         for text, idx in sub_pages:
             btn = QPushButton(text)
             btn.setCheckable(True)
-            btn.setStyleSheet(sub_btn_style)
             self.sub_btn_group.addButton(btn, idx)
             sub_nav_layout.addWidget(btn)
             self.sub_buttons.append(btn)
@@ -238,6 +217,31 @@ class SettingsTab(QWidget):
         
         self.setLayout(layout)
     
+    def set_theme_colors(self, colors):
+        """Applique les couleurs du thème aux sous-onglets"""
+        sub_btn_style = f"""
+            QPushButton {{
+                background-color: {colors['btn_bg']};
+                color: {colors['btn_text']};
+                border: 1px solid {colors['titlebar_bg']};
+                border-radius: 4px;
+                padding: 8px 18px;
+                font-size: 13px;
+                margin: 0 1px;
+            }}
+            QPushButton:checked {{
+                background-color: {colors['btn_checked']};
+                color: {colors['btn_text_checked']};
+                border-color: {colors['btn_checked']};
+            }}
+            QPushButton:hover:!checked {{
+                background-color: {colors['btn_hover']};
+                color: {colors['btn_text_hover']};
+            }}
+        """
+        for btn in self.sub_buttons:
+            btn.setStyleSheet(sub_btn_style)
+    
     def showEvent(self, event):
         super().showEvent(event)
         self.timer.start(2000)
@@ -247,7 +251,6 @@ class SettingsTab(QWidget):
         super().hideEvent(event)
         self.timer.stop()
     
-    # --- Fréquences ---
     def _populate_rates_list(self):
         self.rates_list.clear()
         rates = self.pw.read_allowed_rates()
@@ -290,42 +293,15 @@ class SettingsTab(QWidget):
             QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('list_empty'))
             return
         
-        # 1. Écrire le fichier persistant
         if self.pw.write_allowed_rates(rates):
-            # 2. Appliquer immédiatement via métadonnées (sans redémarrage)
-            if self.pw.apply_allowed_rates(rates):
-                self.logger.info(f"Fréquences sauvegardées et appliquées: {rates}")
-                main_window = self.window()
-                if main_window and hasattr(main_window, 'statusBar'):
-                    rates_str = ', '.join(str(r) for r in rates)
-                    main_window.statusBar().showMessage(
-                        self.i18n.tr('frequencies_saved').format(rates=rates_str),
-                        3000
-                    )
-                # Pas besoin de redémarrer
-                return
-            else:
-                # Fallback : redémarrage si l'application immédiate échoue
-                self.logger.warning("Application immédiate échouée, redémarrage nécessaire")
-                reply = QMessageBox.question(
-                    self,
-                    self.i18n.tr('success'),
-                    self.i18n.tr('config_saved_restart'),
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.Yes
+            self.pw.apply_allowed_rates(rates)
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'statusBar'):
+                rates_str = ', '.join(str(r) for r in rates)
+                main_window.statusBar().showMessage(
+                    self.i18n.tr('frequencies_saved').format(rates=rates_str),
+                    3000
                 )
-                
-                if reply == QMessageBox.StandardButton.Yes:
-                    ok, msg = self.pw.restart_services()
-                    if ok:
-                        main_window = self.window()
-                        if main_window and hasattr(main_window, 'statusBar'):
-                            main_window.statusBar().showMessage(
-                                self.i18n.tr('services_restarted'),
-                                3000
-                            )
-                    else:
-                        QMessageBox.warning(self, self.i18n.tr('error_title'), msg)
         else:
             self.logger.error("Échec écriture fréquences")
             QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('config_error'))
@@ -349,7 +325,6 @@ class SettingsTab(QWidget):
             else:
                 QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('config_error'))
     
-    # --- Buffer ---
     def _load_current_buffer(self):
         try:
             quantum = self.pw.get_quantum()
