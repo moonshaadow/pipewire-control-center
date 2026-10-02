@@ -1,6 +1,6 @@
 # PipeWire Control Center
 
-A versatile and streamlined configuration tool for PipeWire on Linux.
+A versatile and streamlined configuration tool for PipeWire.
 
 ## Overview
 
@@ -13,7 +13,7 @@ PipeWire Control Center (PCC) provides a clean, intuitive interface for managing
 - **Configuration Profiles** — Save and restore your preferred audio setups
 - **AES67 Support** — Native AES67 session configuration with PTP synchronization
 - **System Status** — Real-time monitoring with event logging
-- **Bilingual Interface** — French and English
+
 
 ## Installation
 
