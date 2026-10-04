@@ -422,7 +422,9 @@ class AudioTab(QWidget):
             if item.get('type') != 'PipeWire:Interface:Node':
                 continue
             
-            info = item.get('info', {})
+            info = item.get('info')
+            if info is None:
+                continue
             props = info.get('props', {})
             media_class = props.get('media.class', '')
             
@@ -727,6 +729,10 @@ class AudioTab(QWidget):
         if any(row.slider.is_dragging() for row in self.stream_rows.values()):
             return
         
+        # Ne rien faire si rien n'a changé dans pw-dump
+        if not self.pw.has_changed():
+            return
+        
         self.pw.invalidate_cache()
         data = self.pw._get_pw_dump()
         
@@ -815,7 +821,9 @@ class AudioTab(QWidget):
         output_devices = {d['name']: d for d in self.pw.get_devices() if d['type'] == 'sortie'}
         
         for item in data:
-            info = item.get('info', {})
+            info = item.get('info')
+            if info is None:
+                continue
             props = info.get('props', {})
             media_class = props.get('media.class', '')
             

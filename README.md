@@ -31,4 +31,4 @@ PipeWire Control Center (PCC) provides a clean, intuitive interface for managing
 
 ## License
 
-MIT © 2026 A. Vartanian
+GPL v2 © 2026 A. Vartanian

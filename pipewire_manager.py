@@ -5,6 +5,7 @@ import re
 import json
 import time
 import os
+import hashlib
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from ui.logger import Logger
@@ -19,6 +20,7 @@ class PipeWireManager:
         self._cache_duration = 0.2
         self._pw_dump_cache = None
         self._pw_dump_time = 0
+        self._pw_dump_hash = None
         self.logger.info("PipeWireManager initialisé")
     
     def _check_tools(self):
@@ -88,6 +90,23 @@ class PipeWireManager:
             self.logger.debug("Utilisation du cache précédent (pw-dump échoué)")
             return self._pw_dump_cache
         return []
+
+    def has_changed(self) -> bool:
+        """Retourne True si le pw-dump a changé depuis le dernier appel
+        
+        Cette méthode compare un hash MD5 du pw-dump actuel avec le
+        hash précédent. Elle ne retourne True que si les données ont
+        réellement changé, permettant d'éviter des rafraîchissements
+        inutiles de l'interface.
+        """
+        data = self._get_pw_dump()
+        json_str = json.dumps(data, sort_keys=True)
+        current_hash = hashlib.md5(json_str.encode()).hexdigest()
+        
+        if current_hash != self._pw_dump_hash:
+            self._pw_dump_hash = current_hash
+            return True
+        return False
     
     def _get_metadata(self, key: str) -> Optional[str]:
         ok, out, _ = self._run(['pw-metadata', '0', key])
@@ -142,7 +161,9 @@ class PipeWireManager:
         for item in self._get_pw_dump():
             if item.get('type') != 'PipeWire:Interface:Node':
                 continue
-            info = item.get('info', {})
+            info = item.get('info')
+            if info is None:
+                continue
             props = info.get('props', {})
             media_class = props.get('media.class', '')
             node_name = props.get('node.name', '')
