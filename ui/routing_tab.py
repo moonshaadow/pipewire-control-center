@@ -294,7 +294,7 @@ class AddRuleDialog(QDialog):
         self.device_combo = QComboBox()
         devices = self.pw.get_devices()
         for device in devices:
-            if device['type'] == 'sortie':
+            if device['type'] == 'output':
                 self.device_combo.addItem(device['description'], device['name'])
         form_layout.addRow('Périphérique:', self.device_combo)
         

@@ -254,8 +254,8 @@ class StatusTab(QWidget):
             rates_str = ', '.join(map(str, sorted(rates))) + ' Hz' if rates else self.i18n.tr('default_rates')
             
             devices = self.pw.get_devices()
-            sinks = sum(1 for d in devices if d['type'] == 'sortie')
-            sources = sum(1 for d in devices if d['type'] == 'entrée')
+            sinks = sum(1 for d in devices if d['type'] == 'output')
+            sources = sum(1 for d in devices if d['type'] == 'input')
             
             quantum = self.pw.get_quantum()
             rate = self.pw.get_rate()
@@ -336,7 +336,7 @@ class StatusTab(QWidget):
                 self._log(self.i18n.tr('device_changed').format(self._prev_device, dev), "#81c784", self.i18n.tr('category_audio'))
             self._prev_device = dev
             
-            current = {d['name'] for d in self.pw.get_devices() if d['type'] == 'sortie' and d.get('state') == 'running'}
+            current = {d['name'] for d in self.pw.get_devices() if d['type'] == 'output' and d.get('state') == 'running'}
             for name in current - self._prev_stream_ids:
                 self._log(self.i18n.tr('stream_started').format(name), "#4CAF50", self.i18n.tr('category_audio'))
             for name in self._prev_stream_ids - current:

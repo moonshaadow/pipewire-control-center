@@ -453,7 +453,7 @@ class AudioTab(QWidget):
             rate_str = f"{rate} Hz" if rate != '?' else '?'
             
             if 'Output' in media_class:
-                type_str = self.i18n.tr('sortie')
+                type_str = self.i18n.tr('output')
             else:
                 type_str = self.i18n.tr('entree')
             
@@ -637,8 +637,8 @@ class AudioTab(QWidget):
         )
     
     def _sync_device_layout(self, devices, direction):
-        layout = self.output_layout if direction == 'sortie' else self.input_layout
-        rows = self.device_rows if direction == 'sortie' else self.input_rows
+        layout = self.output_layout if direction == 'output' else self.input_layout
+        rows = self.device_rows if direction == 'output' else self.input_rows
         
         old_rows = dict(rows)
         
@@ -651,7 +651,7 @@ class AudioTab(QWidget):
         
         for device in devices:
             name = device['name']
-            is_input = direction == 'entrée'
+            is_input = direction == 'input'
             if name in old_rows:
                 row = old_rows[name]
                 row.device = device
@@ -670,9 +670,9 @@ class AudioTab(QWidget):
     
     def refresh_devices(self):
         sinks = self._sort_devices(
-            [d for d in self.pw.get_devices() if d['type'] == 'sortie']
+            [d for d in self.pw.get_devices() if d['type'] == 'output']
         )
-        self._sync_device_layout(sinks, 'sortie')
+        self._sync_device_layout(sinks, 'output')
         
         if sinks:
             active = self._find_active_sink(sinks)
@@ -681,9 +681,9 @@ class AudioTab(QWidget):
                 self.device_rows[device['name']].set_selected(device.get('id') == active.get('id'))
         
         sources = self._sort_devices(
-            [d for d in self.pw.get_devices() if d['type'] == 'entrée']
+            [d for d in self.pw.get_devices() if d['type'] == 'input']
         )
-        self._sync_device_layout(sources, 'entrée')
+        self._sync_device_layout(sources, 'input')
         
         if sources:
             active = self._find_active_source(sources)
@@ -751,13 +751,13 @@ class AudioTab(QWidget):
     
     def _refresh_devices_silent(self, data):
         sinks = self._sort_devices(
-            [d for d in self.pw.get_devices() if d['type'] == 'sortie']
+            [d for d in self.pw.get_devices() if d['type'] == 'output']
         )
         if sinks:
             active = self._find_active_sink(sinks)
             current = len(self.device_rows)
             if current != len(sinks):
-                self._sync_device_layout(sinks, 'sortie')
+                self._sync_device_layout(sinks, 'output')
             if active and active.get('is_default'):
                 if not self.selected_output or active.get('id') != self.selected_output.get('id'):
                     self.selected_output = active
@@ -784,13 +784,13 @@ class AudioTab(QWidget):
                             break
         
         sources = self._sort_devices(
-            [d for d in self.pw.get_devices() if d['type'] == 'entrée']
+            [d for d in self.pw.get_devices() if d['type'] == 'input']
         )
         if sources:
             active = self._find_active_source(sources)
             current = len(self.input_rows)
             if current != len(sources):
-                self._sync_device_layout(sources, 'entrée')
+                self._sync_device_layout(sources, 'input')
             if active and active.get('is_default'):
                 if not self.selected_input or active.get('id') != self.selected_input.get('id'):
                     self.selected_input = active
@@ -818,7 +818,7 @@ class AudioTab(QWidget):
     
     def _update_streams(self, data):
         current_ids = set()
-        output_devices = {d['name']: d for d in self.pw.get_devices() if d['type'] == 'sortie'}
+        output_devices = {d['name']: d for d in self.pw.get_devices() if d['type'] == 'output'}
         
         for item in data:
             info = item.get('info')
@@ -936,7 +936,7 @@ class AudioTab(QWidget):
         self.streams_scroll.setVisible(bool(self.stream_rows))
     
     def _on_device_change_requested(self, stream_data):
-        available_devices = [d for d in self.pw.get_devices() if d['type'] == 'sortie']
+        available_devices = [d for d in self.pw.get_devices() if d['type'] == 'output']
         current_device = self._get_stream_target(stream_data['id'])
         
         dialog = DevicePickerDialog(

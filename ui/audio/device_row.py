@@ -99,7 +99,7 @@ class DeviceRow(QWidget):
             self.boost_cb.setStyleSheet(f"color: {colors.get('btn_text', '#888888')};")
     
     def _on_card_clicked(self, device):
-        self.logger.info(f"Clic sur carte périphérique {'entrée' if self.is_input else 'sortie'}: {device.get('name', 'inconnu')}")
+        self.logger.info(f"Clic sur carte périphérique {'input' if self.is_input else 'output'}: {device.get('name', 'inconnu')}")
         if self.pw.set_default_device(device['id']):
             main_window = self.window()
             if main_window and hasattr(main_window, 'statusBar'):

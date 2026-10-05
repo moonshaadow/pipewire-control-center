@@ -35,7 +35,7 @@ class DevicePickerDialog(QDialog):
         default_badge = StreamDeviceBadge({
             'name': '',
             'description': self.i18n.tr('default_device'),
-            'type': 'sortie'
+            'type': 'output'
         })
         default_badge.setFixedSize(70, 70)
         default_badge.setToolTip(self.i18n.tr('default_device_tooltip'))

@@ -186,7 +186,7 @@ class PipeWireManager:
                     (media_class == 'Audio/Sink' and node_name == default_sink_name) or
                     (media_class == 'Audio/Source' and node_name == default_source_name)
                 ),
-                'type': 'sortie' if 'Sink' in media_class else 'entrée',
+                'type': 'output' if 'Sink' in media_class else 'input',
                 'state': info.get('state', 'idle'),
                 'rate': fmt.get('rate', '?'),
                 'format': fmt.get('format', '?'),
@@ -407,8 +407,8 @@ class PipeWireManager:
             'min_quantum': self.get_min_quantum(),
             'max_quantum': self.get_max_quantum(),
             'devices': len(devices),
-            'default_sink': next((d for d in devices if d['is_default'] and d['type'] == 'sortie'), None),
-            'default_source': next((d for d in devices if d['is_default'] and d['type'] == 'entrée'), None),
+            'default_sink': next((d for d in devices if d['is_default'] and d['type'] == 'output'), None),
+            'default_source': next((d for d in devices if d['is_default'] and d['type'] == 'input'), None),
             'allowed_rates': self.read_allowed_rates(),
             'has_config': self.config_file.exists(),
         }

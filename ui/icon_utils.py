@@ -42,7 +42,7 @@ def get_device_icon_path(device: dict, theme_colors=None) -> str:
     elif any(w in name for w in ['headphone', 'headset', 'casque', 'line-out', 'lineout',
                                  'jack', 'front', 'green']):
         icon_name = "headphone"
-    elif device.get('type') == 'entrée':
+    elif device.get('type') == 'input':
         icon_name = "microphone"
     else:
         icon_name = "speaker"

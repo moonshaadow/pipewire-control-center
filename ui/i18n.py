@@ -247,7 +247,7 @@ T = {
         'error': 'erreur',
         'default': 'Défaut',
         'selected': 'Sélectionné',
-        'sortie': 'Sortie',
+        'output': 'Sortie',
         'entree': 'Entrée',
         
         # Dialogues
@@ -587,7 +587,7 @@ T = {
         'error': 'error',
         'default': 'Default',
         'selected': 'Selected',
-        'sortie': 'Output',
+        'output': 'Output',
         'entree': 'Input',
         
         # Dialogues
