@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""Ligne périphérique unifiée (sortie ou entrée)"""
+"""Unified device row (output or input)"""
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QCheckBox
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 from .widgets import DeviceCard, ClickSlider
-from ..i18n import I18n
 from ..logger import Logger
 
 
 class DeviceRow(QWidget):
-    """Ligne périphérique unifiée avec volume et infos"""
+    """Unified device row with volume and info"""
     volume_changed = pyqtSignal(int, float)
     
     def __init__(self, device, pw, is_input=False):
@@ -17,11 +16,10 @@ class DeviceRow(QWidget):
         self.device = device
         self.pw = pw
         self.is_input = is_input
-        self.i18n = I18n.instance()
         self.logger = Logger.instance()
         self._init_ui()
         
-        # Charger le volume initial
+        # Load initial volume
         self._load_initial_volume()
     
     def _init_ui(self):
@@ -41,7 +39,7 @@ class DeviceRow(QWidget):
         
         self.slider = ClickSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(0, 100)
-        self.slider.setValue(0)  # Valeur initiale 0, sera mise à jour
+        self.slider.setValue(0)  # Initial value 0, will be updated
         self.slider.setMinimumWidth(100)
         self.slider.setMaximumWidth(800)
         self.slider.valueChanged.connect(self._on_slider_moved)
@@ -68,7 +66,7 @@ class DeviceRow(QWidget):
         if not self.is_input:
             boost_layout = QHBoxLayout()
             boost_layout.addStretch()
-            self.boost_cb = QCheckBox(self.i18n.tr('boost_150'))
+            self.boost_cb = QCheckBox(self.tr("Boost 150%"))
             self.boost_cb.setFont(QFont("Monospace", 7))
             self.boost_cb.toggled.connect(self._on_boost)
             boost_layout.addWidget(self.boost_cb)
@@ -82,7 +80,7 @@ class DeviceRow(QWidget):
         self.setLayout(layout)
     
     def _load_initial_volume(self):
-        """Charge le volume initial du périphérique"""
+        """Load the device's initial volume"""
         try:
             vol = self.pw.get_volume(self.device['id'])
             if vol is not None:
@@ -91,7 +89,7 @@ class DeviceRow(QWidget):
             pass
     
     def set_theme_colors(self, colors):
-        """Applique les couleurs du thème"""
+        """Apply theme colors"""
         self.card.set_theme_colors(colors)
         self.vol_label.setStyleSheet(f"color: {colors.get('btn_text_checked', '#ffffff')};")
         self.info_lbl.setStyleSheet(f"color: {colors.get('btn_text', '#aaaaaa')};")
@@ -99,14 +97,14 @@ class DeviceRow(QWidget):
             self.boost_cb.setStyleSheet(f"color: {colors.get('btn_text', '#888888')};")
     
     def _on_card_clicked(self, device):
-        self.logger.info(f"Clic sur carte périphérique {'input' if self.is_input else 'output'}: {device.get('name', 'inconnu')}")
+        self.logger.info(f"Click on {'input' if self.is_input else 'output'} device card: {device.get('name', 'unknown')}")
         if self.pw.set_default_device(device['id']):
             main_window = self.window()
             if main_window and hasattr(main_window, 'statusBar'):
                 if self.is_input:
-                    msg = self.i18n.tr('default_input_changed').format(description=device.get('description', ''))
+                    msg = self.tr("Default input set to {description}").format(description=device.get('description', ''))
                 else:
-                    msg = self.i18n.tr('default_output_changed').format(description=device.get('description', ''))
+                    msg = self.tr("Default output set to {description}").format(description=device.get('description', ''))
                 main_window.statusBar().showMessage(msg, 3000)
     
     def _on_slider_moved(self, value):
@@ -115,12 +113,12 @@ class DeviceRow(QWidget):
             self.volume_changed.emit(self.device['id'], value / 100.0)
     
     def _on_release(self):
-        self.logger.debug(f"Slider relâché: {self.device['name']} -> {self.slider.value()}%")
+        self.logger.debug(f"Slider released: {self.device['name']} -> {self.slider.value()}%")
         self.volume_changed.emit(self.device['id'], self.slider.value() / 100.0)
         main_window = self.window()
         if main_window and hasattr(main_window, 'statusBar'):
             main_window.statusBar().showMessage(
-                self.i18n.tr('volume_changed_status').format(
+                self.tr("Volume of {name} set to {value}%").format(
                     name=self.device.get('description', self.device.get('name', '')),
                     value=self.slider.value()
                 ),
@@ -128,7 +126,7 @@ class DeviceRow(QWidget):
             )
     
     def _on_boost(self, checked):
-        self.logger.debug(f"Boost {self.device['name']}: {'activé' if checked else 'désactivé'}")
+        self.logger.debug(f"Boost {self.device['name']}: {'enabled' if checked else 'disabled'}")
         if checked:
             self.slider.setRange(0, 150)
         else:

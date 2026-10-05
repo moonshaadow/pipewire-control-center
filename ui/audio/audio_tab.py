@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Onglet Audio principal"""
+"""Main Audio tab"""
 import os
 import subprocess
 import re
@@ -17,18 +17,16 @@ from .stream_row import StreamRow
 from .device_picker import DevicePickerDialog
 from .mpris import MprisHelper
 from ..icon_utils import get_device_icon_path
-from ..i18n import I18n
 from ..logger import Logger
 from ..themes import get_sub_btn_style
 
 
 class AudioTab(QWidget):
-    """Onglet Audio avec sous-onglets Sorties, Entrées, Périphériques"""
+    """Audio tab with Outputs, Inputs, Devices sub-tabs"""
     
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
-        self.i18n = I18n.instance()
         self.logger = Logger.instance()
         self.mpris = MprisHelper(self.logger)
         self.device_rows = {}
@@ -51,7 +49,7 @@ class AudioTab(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(8)
         
-        # Sous-navigation
+        # Sub navigation
         sub_nav_layout = QHBoxLayout()
         sub_nav_layout.setContentsMargins(0, 4, 0, 4)
         sub_nav_layout.setSpacing(1)
@@ -62,9 +60,9 @@ class AudioTab(QWidget):
         
         self.sub_buttons = []
         sub_pages = [
-            (self.i18n.tr('sorties'), 0),
-            (self.i18n.tr('entrees'), 1),
-            (self.i18n.tr('devices'), 2)
+            (self.tr("Outputs"), 0),
+            (self.tr("Inputs"), 1),
+            (self.tr("Devices"), 2)
         ]
         
         for text, idx in sub_pages:
@@ -79,18 +77,18 @@ class AudioTab(QWidget):
         
         self.sub_stack = QStackedWidget()
         
-        # Page Sorties
+        # Outputs page
         self._init_output_page()
         
-        # Page Entrées
+        # Inputs page
         self._init_input_page()
         
-        # Page Périphériques
+        # Devices page
         self._init_devices_page()
         
         layout.addWidget(self.sub_stack)
         
-        # Flux actifs
+        # Active streams
         self._init_streams_section(layout)
         
         self.sub_buttons[0].setChecked(True)
@@ -106,7 +104,7 @@ class AudioTab(QWidget):
         output_layout.setSpacing(2)
         output_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.output_gb = QGroupBox(self.i18n.tr('peripheriques_sortie'))
+        self.output_gb = QGroupBox(self.tr("Output devices"))
         output_gb_layout = QVBoxLayout()
         output_gb_layout.setSpacing(2)
         
@@ -132,7 +130,7 @@ class AudioTab(QWidget):
         input_layout.setSpacing(2)
         input_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.input_gb = QGroupBox(self.i18n.tr('peripheriques_entree'))
+        self.input_gb = QGroupBox(self.tr("Input devices"))
         input_gb_layout = QVBoxLayout()
         input_gb_layout.setSpacing(2)
         
@@ -158,14 +156,14 @@ class AudioTab(QWidget):
         devices_page_layout.setSpacing(8)
         devices_page_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.devices_gb = QGroupBox(self.i18n.tr('peripheriques_detectes'))
+        self.devices_gb = QGroupBox(self.tr("Detected devices"))
         devices_layout = QVBoxLayout()
         
         self.devices_tree = QTreeWidget()
         self.devices_tree.setHeaderLabels([
-            self.i18n.tr('id'), self.i18n.tr('description'), self.i18n.tr('type'),
-            self.i18n.tr('state'), self.i18n.tr('rate'), self.i18n.tr('format'),
-            self.i18n.tr('range')
+            self.tr("ID"), self.tr("Description"), self.tr("Type"),
+            self.tr("State"), self.tr("Rate"), self.tr("Format"),
+            self.tr("Range")
         ])
         self.devices_tree.setColumnWidth(0, 50)
         self.devices_tree.setColumnWidth(1, 220)
@@ -173,18 +171,18 @@ class AudioTab(QWidget):
         devices_layout.addWidget(self.devices_tree)
         
         devices_btn_layout = QHBoxLayout()
-        self.set_default_btn = QPushButton(self.i18n.tr('definir_defaut'))
+        self.set_default_btn = QPushButton(self.tr("Set as default"))
         self.set_default_btn.clicked.connect(self._set_default_device)
         devices_btn_layout.addWidget(self.set_default_btn)
         devices_btn_layout.addStretch()
         devices_layout.addLayout(devices_btn_layout)
         
-        self.destroy_cb = QCheckBox(self.i18n.tr('mode_suppression'))
+        self.destroy_cb = QCheckBox(self.tr("Destruction mode"))
         self.destroy_cb.setStyleSheet("color: #ef5350; font-weight: bold;")
         self.destroy_cb.stateChanged.connect(self._on_destroy_state_changed)
         devices_layout.addWidget(self.destroy_cb)
         
-        self.destroy_btn = QPushButton(self.i18n.tr('supprimer_noeud'))
+        self.destroy_btn = QPushButton(self.tr("Destroy node"))
         self.destroy_btn.setStyleSheet("QPushButton { color: #ef5350; font-weight: bold; }")
         self.destroy_btn.clicked.connect(self._destroy_node)
         self.destroy_btn.setVisible(False)
@@ -193,14 +191,14 @@ class AudioTab(QWidget):
         self.devices_gb.setLayout(devices_layout)
         devices_page_layout.addWidget(self.devices_gb)
         
-        self.apps_gb = QGroupBox(self.i18n.tr('applications'))
+        self.apps_gb = QGroupBox(self.tr("Applications"))
         apps_layout = QVBoxLayout()
         
         self.apps_tree = QTreeWidget()
         self.apps_tree.setHeaderLabels([
-            self.i18n.tr('id'), self.i18n.tr('application'), self.i18n.tr('type'),
-            self.i18n.tr('state'), self.i18n.tr('rate'), self.i18n.tr('format'),
-            self.i18n.tr('linked_device')
+            self.tr("ID"), self.tr("Application"), self.tr("Type"),
+            self.tr("State"), self.tr("Rate"), self.tr("Format"),
+            self.tr("Linked device")
         ])
         self.apps_tree.setColumnWidth(0, 50)
         self.apps_tree.setColumnWidth(1, 180)
@@ -216,7 +214,7 @@ class AudioTab(QWidget):
         self.sub_stack.addWidget(self.devices_page)
     
     def _init_streams_section(self, layout):
-        self.flux_gb = QGroupBox(self.i18n.tr('flux_actifs'))
+        self.flux_gb = QGroupBox(self.tr("Active streams"))
         flux_layout = QVBoxLayout()
         
         self.streams_widget = QWidget()
@@ -232,7 +230,7 @@ class AudioTab(QWidget):
         self.streams_scroll.setStyleSheet("QScrollArea { border: none; }")
         flux_layout.addWidget(self.streams_scroll)
         
-        self.empty_lbl = QLabel(self.i18n.tr('aucun_flux'))
+        self.empty_lbl = QLabel(self.tr("No active stream"))
         self.empty_lbl.setFont(QFont("Monospace", 9))
         self.empty_lbl.setStyleSheet("color: #555555;")
         self.empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -243,17 +241,17 @@ class AudioTab(QWidget):
         layout.addWidget(self.flux_gb)
 
     def showEvent(self, event):
-        """Démarre le timer quand l'onglet devient visible"""
+        """Start timer when tab becomes visible"""
         super().showEvent(event)
         self.timer.start(500)
     
     def hideEvent(self, event):
-        """Arrête le timer quand l'onglet n'est plus visible"""
+        """Stop timer when tab is no longer visible"""
         super().hideEvent(event)
         self.timer.stop()    
 
     def set_theme_colors(self, colors):
-        """Applique les couleurs du thème aux sous-onglets et aux rows"""
+        """Apply theme colors to sub-tabs and rows"""
         self._theme_colors = colors
         
         sub_btn_style = get_sub_btn_style(colors)
@@ -261,10 +259,10 @@ class AudioTab(QWidget):
         for btn in self.sub_buttons:
             btn.setStyleSheet(sub_btn_style)
         
-        # Mettre à jour empty_lbl
+        # Update empty_lbl
         self.empty_lbl.setStyleSheet(f"color: {colors.get('btn_text', '#555555')};")
         
-        # Propager aux rows
+        # Propagate to rows
         for row in self.device_rows.values():
             row.set_theme_colors(colors)
         for row in self.input_rows.values():
@@ -290,7 +288,7 @@ class AudioTab(QWidget):
             if apps_state is not None:
                 self.apps_tree.header().restoreState(apps_state)
         except Exception as e:
-            self.logger.error(f"Erreur restauration colonnes: {e}")
+            self.logger.error(f"Column restoration error: {e}")
     
     def _save_header_state(self):
         try:
@@ -299,7 +297,7 @@ class AudioTab(QWidget):
             settings.setValue('apps_header_state', self.apps_tree.header().saveState())
             settings.sync()
         except Exception as e:
-            self.logger.error(f"Erreur sauvegarde colonnes: {e}")
+            self.logger.error(f"Column save error: {e}")
     
     def _get_stream_target(self, stream_id):
         try:
@@ -312,7 +310,7 @@ class AudioTab(QWidget):
                 if match:
                     return match.group(1)
         except Exception as e:
-            self.logger.error(f"Erreur lecture target.object: {e}")
+            self.logger.error(f"target.object read error: {e}")
         return ''
     
     def _get_desktop_name(self, binary):
@@ -366,7 +364,7 @@ class AudioTab(QWidget):
             if dev['rates_min'] and dev['rates_max']:
                 range_str = f"{dev['rates_min']}-{dev['rates_max']} Hz"
             elif dev['rates_default']:
-                range_str = f"{dev['rates_default']} Hz (fixe)"
+                range_str = f"{dev['rates_default']} Hz (fixed)"
             else:
                 range_str = "?"
             
@@ -435,7 +433,7 @@ class AudioTab(QWidget):
             if 'monitor' in node_name.lower() or node_name in ('pipewire', 'WirePlumber'):
                 continue
             
-            app_name = props.get('application.name') or props.get('node.name', 'Inconnu')
+            app_name = props.get('application.name') or props.get('node.name', 'Unknown')
             binary = props.get('application.process.binary', '')
             node_id = item.get('id', 0)
             state = info.get('state', 'idle')
@@ -453,9 +451,9 @@ class AudioTab(QWidget):
             rate_str = f"{rate} Hz" if rate != '?' else '?'
             
             if 'Output' in media_class:
-                type_str = self.i18n.tr('output')
+                type_str = self.tr("Output")
             else:
-                type_str = self.i18n.tr('entree')
+                type_str = self.tr("Input")
             
             linked_device = ''
             if 'Output' in media_class:
@@ -532,7 +530,7 @@ class AudioTab(QWidget):
             return
         
         menu = QMenu(self)
-        kill_action = QAction(f"🗑 {self.i18n.tr('supprimer_noeud')} : {app_name}", self)
+        kill_action = QAction(f"🗑 {self.tr('Destroy node')} : {app_name}", self)
         kill_action.triggered.connect(lambda: self._kill_app_node(node_id, app_name))
         menu.addAction(kill_action)
         menu.exec(self.apps_tree.viewport().mapToGlobal(pos))
@@ -540,10 +538,11 @@ class AudioTab(QWidget):
     def _kill_app_node(self, node_id, app_name):
         reply = QMessageBox.warning(
             self,
-            self.i18n.tr('confirmation'),
-            f"Supprimer le flux de « {app_name} » (ID {node_id}) ?\n\n"
-            "Cette action détruira le nœud PipeWire de l'application.\n"
-            "L'application devra peut-être être redémarrée pour recréer son flux.",
+            self.tr("Confirmation"),
+            self.tr("Destroy stream for \"{app_name}\" (ID {node_id})?\n\n"
+                    "This will destroy the application's PipeWire node.\n"
+                    "The application may need to be restarted to recreate its stream.")
+                .format(app_name=app_name, node_id=node_id),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
@@ -556,16 +555,16 @@ class AudioTab(QWidget):
                 main_window = self.window()
                 if main_window and hasattr(main_window, 'statusBar'):
                     main_window.statusBar().showMessage(
-                        self.i18n.tr('node_destroyed_status').format(id=node_id),
+                        self.tr("Node {id} destroyed").format(id=node_id),
                         3000
                     )
             else:
-                QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('node_destroy_error') + f"\n{err}")
+                QMessageBox.warning(self, self.tr("Error"), self.tr("Cannot destroy node") + f"\n{err}")
     
     def _set_default_device(self):
         item = self.devices_tree.currentItem()
         if not item:
-            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('select_device'))
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Please select a device"))
             return
         
         dev_id = int(item.text(0).replace(" ★", ""))
@@ -574,19 +573,21 @@ class AudioTab(QWidget):
             main_window = self.window()
             if main_window and hasattr(main_window, 'statusBar'):
                 main_window.statusBar().showMessage(
-                    self.i18n.tr('default_device_changed_status').format(description=item.text(1)),
+                    self.tr("Default device set to {description}").format(description=item.text(1)),
                     3000
                 )
         else:
-            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('device_default_error'))
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Cannot set default device"))
     
     def _on_destroy_state_changed(self, state):
         checked = state == 2
         if checked:
             reply = QMessageBox.warning(
                 self,
-                "⚠️ " + self.i18n.tr('mode_suppression'),
-                self.i18n.tr('destroy_warning'),
+                "⚠️ " + self.tr("Destruction mode"),
+                self.tr("Destruction mode allows destroying PipeWire nodes.\n"
+                        "This can break audio for other applications.\n\n"
+                        "Are you sure you want to enable it?"),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
@@ -600,7 +601,7 @@ class AudioTab(QWidget):
     def _destroy_node(self):
         item = self.devices_tree.currentItem()
         if not item:
-            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('select_device'))
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Please select a device"))
             return
         
         dev_id = int(item.text(0).replace(" ★", ""))
@@ -608,8 +609,8 @@ class AudioTab(QWidget):
         
         reply = QMessageBox.question(
             self,
-            self.i18n.tr('confirmation'),
-            self.i18n.tr('node_destroy_warning') + f"\n\n{dev_name} (ID {dev_id})"
+            self.tr("Confirmation"),
+            self.tr("Destroy node \"{name}\" (ID {id})?").format(name=dev_name, id=dev_id)
         )
         
         if reply == QMessageBox.StandardButton.Yes:
@@ -620,11 +621,11 @@ class AudioTab(QWidget):
                 main_window = self.window()
                 if main_window and hasattr(main_window, 'statusBar'):
                     main_window.statusBar().showMessage(
-                        self.i18n.tr('node_destroyed_status').format(id=dev_id),
+                        self.tr("Node {id} destroyed").format(id=dev_id),
                         3000
                     )
             else:
-                QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('node_destroy_error') + f"\n{err}")
+                QMessageBox.warning(self, self.tr("Error"), self.tr("Cannot destroy node") + f"\n{err}")
     
     def _sort_devices(self, devices):
         return sorted(
@@ -659,10 +660,10 @@ class AudioTab(QWidget):
             else:
                 row = DeviceRow(device, self.pw, is_input=is_input)
                 row.volume_changed.connect(lambda did, vol: self.pw.set_volume(did, vol))
-                # Appliquer le thème si disponible
+                # Apply theme if available
                 if self._theme_colors:
                     row.set_theme_colors(self._theme_colors)
-                self.logger.debug(f"Nouveau périphérique ajouté: {name}")
+                self.logger.debug(f"New device added: {name}")
             rows[name] = row
             layout.addWidget(row)
         
@@ -693,7 +694,7 @@ class AudioTab(QWidget):
         
         current_names = set(self.device_rows.keys()) | set(self.input_rows.keys())
         if current_names != self._prev_device_names:
-            self.logger.info(f"Périphériques changés: {len(self._prev_device_names)} -> {len(current_names)}")
+            self.logger.info(f"Devices changed: {len(self._prev_device_names)} -> {len(current_names)}")
             self._prev_device_names = current_names
     
     def _find_active_sink(self, sinks):
@@ -729,7 +730,7 @@ class AudioTab(QWidget):
         if any(row.slider.is_dragging() for row in self.stream_rows.values()):
             return
         
-        # Ne rien faire si rien n'a changé dans pw-dump
+        # Do nothing if pw-dump has not changed
         if not self.pw.has_changed():
             return
         
@@ -884,8 +885,7 @@ class AudioTab(QWidget):
                     for dev in output_devices.values():
                         if dev['description'] == linked_device_name:
                             stream_data['device'] = dev
-                            break
-            
+                            break            
             if 'device' not in stream_data:
                 default_sink = next((d for d in output_devices.values() if d.get('is_default')), None)
                 if default_sink:
@@ -915,14 +915,14 @@ class AudioTab(QWidget):
                 self.streams_layout.addWidget(row)
                 if 'device' in stream_data:
                     row.set_device_badge(stream_data['device'])
-                # Appliquer les couleurs du thème si disponibles
+                # Apply theme colors if available
                 if self._theme_colors:
                     row.set_theme_colors(self._theme_colors)
-                self.logger.debug(f"Nouveau flux audio: {display_name} (binaire: {binary})")
+                self.logger.debug(f"New audio stream: {display_name} (binary: {binary})")
         
         for sid in list(self.stream_rows):
             if sid not in current_ids:
-                self.logger.debug(f"Flux audio supprimé: {self.stream_rows[sid].stream.get('name', 'inconnu')}")
+                self.logger.debug(f"Audio stream removed: {self.stream_rows[sid].stream.get('name', 'unknown')}")
                 self.stream_rows[sid].deleteLater()
                 del self.stream_rows[sid]
         
@@ -940,7 +940,7 @@ class AudioTab(QWidget):
         current_device = self._get_stream_target(stream_data['id'])
         
         dialog = DevicePickerDialog(
-            stream_data.get('name', 'Flux'),
+            stream_data.get('name', 'Stream'),
             current_device,
             available_devices,
             self
@@ -959,14 +959,14 @@ class AudioTab(QWidget):
                 capture_output=True, timeout=5
             )
             if result.returncode == 0:
-                self.logger.info(f"Flux {stream_id} routé vers {device_name}")
+                self.logger.info(f"Stream {stream_id} routed to {device_name}")
                 self.pw.invalidate_cache()
                 main_window = self.window()
                 if main_window and hasattr(main_window, 'statusBar'):
                     stream_name = self.stream_rows.get(str(stream_id), None)
                     stream_display = stream_name.stream.get('name', str(stream_id)) if stream_name else str(stream_id)
                     main_window.statusBar().showMessage(
-                        self.i18n.tr('stream_routed').format(stream=stream_display, device=device_name),
+                        self.tr("Stream {stream} routed to {device}").format(stream=stream_display, device=device_name),
                         3000
                     )
             else:
@@ -975,11 +975,11 @@ class AudioTab(QWidget):
                     stream_name = self.stream_rows.get(str(stream_id), None)
                     stream_display = stream_name.stream.get('name', str(stream_id)) if stream_name else str(stream_id)
                     main_window.statusBar().showMessage(
-                        self.i18n.tr('stream_route_error').format(stream=stream_display),
+                        self.tr("Cannot route stream {stream}").format(stream=stream_display),
                         3000
                     )
         except Exception as e:
-            self.logger.error(f"Erreur routing flux: {e}")
+            self.logger.error(f"Stream routing error: {e}")
     
     def _route_stream_to_default(self, stream_id):
         try:
@@ -988,18 +988,18 @@ class AudioTab(QWidget):
                 capture_output=True, timeout=5
             )
             if result.returncode == 0:
-                self.logger.info(f"Flux {stream_id} retour au défaut")
+                self.logger.info(f"Stream {stream_id} back to default")
                 self.pw.invalidate_cache()
                 main_window = self.window()
                 if main_window and hasattr(main_window, 'statusBar'):
                     stream_name = self.stream_rows.get(str(stream_id), None)
                     stream_display = stream_name.stream.get('name', str(stream_id)) if stream_name else str(stream_id)
                     main_window.statusBar().showMessage(
-                        self.i18n.tr('stream_routed_default').format(stream=stream_display),
+                        self.tr("Stream {stream} back to default").format(stream=stream_display),
                         3000
                     )
         except Exception as e:
-            self.logger.error(f"Erreur retour défaut: {e}")
+            self.logger.error(f"Back to default error: {e}")
     
     def _on_stream_volume(self, device_id, volume):
         self.pw.set_volume(device_id, volume)
@@ -1009,18 +1009,18 @@ class AudioTab(QWidget):
         self._refresh_devices_table()
     
     def refresh_language(self):
-        self.sub_buttons[0].setText(self.i18n.tr('sorties'))
-        self.sub_buttons[1].setText(self.i18n.tr('entrees'))
-        self.sub_buttons[2].setText(self.i18n.tr('devices'))
-        self.output_gb.setTitle(self.i18n.tr('peripheriques_sortie'))
-        self.input_gb.setTitle(self.i18n.tr('peripheriques_entree'))
-        self.flux_gb.setTitle(self.i18n.tr('flux_actifs'))
-        self.empty_lbl.setText(self.i18n.tr('aucun_flux'))
-        self.devices_gb.setTitle(self.i18n.tr('peripheriques_detectes'))
-        self.apps_gb.setTitle(self.i18n.tr('applications'))
-        self.set_default_btn.setText(self.i18n.tr('definir_defaut'))
-        self.destroy_cb.setText(self.i18n.tr('mode_suppression'))
-        self.destroy_btn.setText(self.i18n.tr('supprimer_noeud'))
+        self.sub_buttons[0].setText(self.tr("Outputs"))
+        self.sub_buttons[1].setText(self.tr("Inputs"))
+        self.sub_buttons[2].setText(self.tr("Devices"))
+        self.output_gb.setTitle(self.tr("Output devices"))
+        self.input_gb.setTitle(self.tr("Input devices"))
+        self.flux_gb.setTitle(self.tr("Active streams"))
+        self.empty_lbl.setText(self.tr("No active stream"))
+        self.devices_gb.setTitle(self.tr("Detected devices"))
+        self.apps_gb.setTitle(self.tr("Applications"))
+        self.set_default_btn.setText(self.tr("Set as default"))
+        self.destroy_cb.setText(self.tr("Destruction mode"))
+        self.destroy_btn.setText(self.tr("Destroy node"))
     
     def shutdown(self):
         self._save_header_state()

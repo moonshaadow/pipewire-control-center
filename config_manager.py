@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gestion des profils de configuration"""
+"""Configuration profiles management"""
 import json
 from pathlib import Path
 from datetime import datetime

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Helpers MPRIS pour les métadonnées des flux"""
+"""MPRIS helpers for stream metadata"""
 import subprocess
 import re
 import time
 
 
 class MprisHelper:
-    """Gestion des métadonnées MPRIS"""
+    """MPRIS metadata management"""
     
     def __init__(self, logger):
         self.logger = logger
@@ -14,7 +14,7 @@ class MprisHelper:
         self._cache_time = 0
     
     def get_players(self):
-        """Liste les lecteurs MPRIS disponibles"""
+        """List available MPRIS players"""
         now = time.time()
         if now - self._cache_time < 5:
             return list(self._cache.keys())
@@ -41,7 +41,7 @@ class MprisHelper:
             return list(self._cache.keys())
     
     def get_metadata(self, player_name):
-        """Récupère les métadonnées d'un lecteur MPRIS"""
+        """Get metadata from an MPRIS player"""
         try:
             result = subprocess.run(
                 ['dbus-send', '--session', '--print-reply',
@@ -70,7 +70,7 @@ class MprisHelper:
             return {}
     
     def get_metadata_for_app(self, app_name):
-        """Cherche les métadonnées pour une application donnée"""
+        """Search for metadata for a given application"""
         app_lower = app_name.lower()
         
         players = self.get_players()

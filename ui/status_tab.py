@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Onglet d'état avec journal enrichi et boutons d'action"""
+"""Status tab with enriched log and action buttons"""
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QTextEdit,
     QPushButton, QLabel, QMessageBox
@@ -11,14 +11,12 @@ import subprocess
 import re
 import os
 from pathlib import Path
-from .i18n import I18n
 from .logger import Logger
 
 class StatusTab(QWidget):
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
-        self.i18n = I18n.instance()
         self.logger = Logger.instance()
         self._events = []
         self._logged_aes67_lines = set()
@@ -44,13 +42,13 @@ class StatusTab(QWidget):
         self.version_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.version_lbl)
         
-        # Boutons d'action centrés
+        # Centered action buttons
         actions_layout = QHBoxLayout()
         actions_layout.setSpacing(10)
         actions_layout.addStretch(1)
         
-        self.restart_btn = QPushButton(self.i18n.tr('redemarrer_services'))
-        self.restart_btn.setToolTip(self.i18n.tr('restart_btn_tooltip'))
+        self.restart_btn = QPushButton(self.tr("Restart services"))
+        self.restart_btn.setToolTip(self.tr("Restart PipeWire and WirePlumber (active streams will be interrupted)"))
         self.restart_btn.setStyleSheet("""
             QPushButton {
                 padding: 8px 16px;
@@ -67,8 +65,8 @@ class StatusTab(QWidget):
         self.restart_btn.clicked.connect(self._restart_services)
         actions_layout.addWidget(self.restart_btn)
         
-        self.clean_btn = QPushButton(self.i18n.tr('nettoyer_configs'))
-        self.clean_btn.setToolTip(self.i18n.tr('clean_btn_tooltip'))
+        self.clean_btn = QPushButton(self.tr("Clean configs"))
+        self.clean_btn.setToolTip(self.tr("Remove all local PipeWire and WirePlumber configurations created by PCC"))
         self.clean_btn.setStyleSheet("""
             QPushButton {
                 padding: 8px 16px;
@@ -88,8 +86,8 @@ class StatusTab(QWidget):
         actions_layout.addStretch(1)
         layout.addLayout(actions_layout)
         
-        # Système
-        self.sys_gb = QGroupBox(self.i18n.tr('systeme'))
+        # System
+        self.sys_gb = QGroupBox(self.tr("System"))
         sys_layout = QVBoxLayout()
         self.sys_text = QTextEdit()
         self.sys_text.setReadOnly(True)
@@ -99,14 +97,14 @@ class StatusTab(QWidget):
         self.sys_text.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._update_sys()
         sys_layout.addWidget(self.sys_text)
-        self.refresh_sys_btn = QPushButton(self.i18n.tr('rafraichir'))
+        self.refresh_sys_btn = QPushButton(self.tr("Refresh"))
         self.refresh_sys_btn.clicked.connect(self._update_sys)
         sys_layout.addWidget(self.refresh_sys_btn, alignment=Qt.AlignmentFlag.AlignRight)
         self.sys_gb.setLayout(sys_layout)
         layout.addWidget(self.sys_gb)
         
-        # Journal
-        self.events_gb = QGroupBox(self.i18n.tr('journal'))
+        # Log
+        self.events_gb = QGroupBox(self.tr("Log"))
         events_layout = QVBoxLayout()
         self.events_text = QTextEdit()
         self.events_text.setReadOnly(True)
@@ -116,16 +114,16 @@ class StatusTab(QWidget):
         events_layout.addWidget(self.events_text)
         
         btn_layout = QHBoxLayout()
-        self.clear_btn = QPushButton(self.i18n.tr('effacer'))
+        self.clear_btn = QPushButton(self.tr("Clear"))
         self.clear_btn.clicked.connect(lambda: (self._events.clear(), self._refresh_events()))
         btn_layout.addWidget(self.clear_btn)
         
-        self.auto_scroll_cb = QPushButton(self.i18n.tr('auto_scroll_on'))
+        self.auto_scroll_cb = QPushButton(self.tr("Auto-scroll ON"))
         self.auto_scroll_cb.setCheckable(True)
         self.auto_scroll_cb.setChecked(True)
         self.auto_scroll_cb.toggled.connect(
             lambda checked: self.auto_scroll_cb.setText(
-                self.i18n.tr('auto_scroll_on') if checked else self.i18n.tr('auto_scroll_off')
+                self.tr("Auto-scroll ON") if checked else self.tr("Auto-scroll OFF")
             )
         )
         btn_layout.addWidget(self.auto_scroll_cb)
@@ -137,35 +135,35 @@ class StatusTab(QWidget):
         self.setLayout(layout)
     
     def _restart_services(self):
-        """Redémarre PipeWire et WirePlumber"""
+        """Restart PipeWire and WirePlumber"""
         reply = QMessageBox.question(
             self,
-            self.i18n.tr('confirmation'),
-            self.i18n.tr('restart_confirm') + "\n\n" + self.i18n.tr('restart_warning'),
+            self.tr("Confirmation"),
+            self.tr("Restart PipeWire and WirePlumber?") + "\n\n" + self.tr("Active audio streams will be interrupted."),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
             ok, msg = self.pw.restart_services()
             if ok:
-                self._log(msg, "#4CAF50", self.i18n.tr('category_audio'))
+                self._log(msg, "#4CAF50", self.tr("Audio"))
                 main_window = self.window()
                 if main_window and hasattr(main_window, 'statusBar'):
                     main_window.statusBar().showMessage(
-                        self.i18n.tr('services_restarted'),
+                        self.tr("Services restarted"),
                         3000
                     )
             else:
-                self._log(msg, "#ef5350", self.i18n.tr('category_audio'))
+                self._log(msg, "#ef5350", self.tr("Audio"))
                 main_window = self.window()
                 if main_window and hasattr(main_window, 'statusBar'):
                     main_window.statusBar().showMessage(
-                        self.i18n.tr('services_restart_error'),
+                        self.tr("Services restart error"),
                         3000
                     )
     
     def _clean_all_configs(self):
-        """Supprime toutes les configurations locales"""
+        """Remove all local configurations"""
         pipewire_dir = Path.home() / '.config' / 'pipewire' / 'pipewire.conf.d'
         wireplumber_dir = Path.home() / '.config' / 'wireplumber' / 'main.lua.d'
         
@@ -176,15 +174,15 @@ class StatusTab(QWidget):
             files_to_delete.extend(wireplumber_dir.glob('*.lua'))
         
         if not files_to_delete:
-            QMessageBox.information(self, self.i18n.tr('info'), self.i18n.tr('no_local_config'))
+            QMessageBox.information(self, self.tr("Info"), self.tr("No local configuration found"))
             return
         
         file_list = '\n'.join(f"  • {f}" for f in files_to_delete)
         
         reply = QMessageBox.question(
             self,
-            self.i18n.tr('confirmation'),
-            self.i18n.tr('clean_confirm').format(file_list=file_list),
+            self.tr("Confirmation"),
+            self.tr("Remove the following files?\n\n{file_list}").format(file_list=file_list),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
@@ -196,12 +194,12 @@ class StatusTab(QWidget):
         for f in files_to_delete:
             try:
                 f.unlink()
-                self.logger.info(f"Fichier supprimé: {f}")
+                self.logger.info(f"File removed: {f}")
             except Exception as e:
                 errors.append(str(e))
-                self.logger.error(f"Erreur suppression {f}: {e}")
+                self.logger.error(f"Remove error {f}: {e}")
         
-        # Supprimer les dossiers vides
+        # Remove empty directories
         try:
             if pipewire_dir.exists():
                 pipewire_dir.rmdir()
@@ -214,44 +212,44 @@ class StatusTab(QWidget):
             pass
         
         if errors:
-            self._log(self.i18n.tr('clean_errors').format(errors='\n'.join(errors)), "#ef5350", self.i18n.tr('category_general'))
+            self._log(self.tr("Clean errors:\n{errors}").format(errors='\n'.join(errors)), "#ef5350", self.tr("General"))
         else:
-            self._log(self.i18n.tr('clean_configs_success'), "#4CAF50", self.i18n.tr('category_general'))
+            self._log(self.tr("Configurations cleaned successfully"), "#4CAF50", self.tr("General"))
             main_window = self.window()
             if main_window and hasattr(main_window, 'statusBar'):
                 main_window.statusBar().showMessage(
-                    self.i18n.tr('configs_cleaned'),
+                    self.tr("Configurations cleaned"),
                     3000
                 )
-            # Redémarrer les services
+            # Restart services
             ok, msg = self.pw.restart_services()
             if ok:
-                self._log(msg, "#4CAF50", self.i18n.tr('category_audio'))
+                self._log(msg, "#4CAF50", self.tr("Audio"))
                 main_window = self.window()
                 if main_window and hasattr(main_window, 'statusBar'):
                     main_window.statusBar().showMessage(
-                        self.i18n.tr('services_restarted'),
+                        self.tr("Services restarted"),
                         3000
                     )
             else:
-                self._log(msg, "#ef5350", self.i18n.tr('category_audio'))
+                self._log(msg, "#ef5350", self.tr("Audio"))
     
     def _update_sys(self):
         try:
-            pw_v = "Inconnue"
+            pw_v = "Unknown"
             result = subprocess.run(['pipewire', '--version'], capture_output=True, text=True)
             if result.returncode == 0:
                 m = re.search(r'(\d+\.\d+\.\d+)', result.stdout)
                 if m: pw_v = m.group(1)
             
-            wp_v = "Inconnue"
+            wp_v = "Unknown"
             result = subprocess.run(['wireplumber', '--version'], capture_output=True, text=True)
             if result.returncode == 0:
                 m = re.search(r'(\d+\.\d+\.\d+)', result.stdout + result.stderr)
                 if m: wp_v = m.group(1)
             
             rates = self.pw.read_allowed_rates()
-            rates_str = ', '.join(map(str, sorted(rates))) + ' Hz' if rates else self.i18n.tr('default_rates')
+            rates_str = ', '.join(map(str, sorted(rates))) + ' Hz' if rates else self.tr("Default rates")
             
             devices = self.pw.get_devices()
             sinks = sum(1 for d in devices if d['type'] == 'output')
@@ -264,49 +262,49 @@ class StatusTab(QWidget):
             xruns = self._get_xruns()
             aes67_state = self._get_aes67_state()
             ptp_state = self._get_ptp_state()
-            detected_str = self.i18n.tr('detected')
+            detected_str = self.tr("detected")
             
             self.sys_text.setHtml(
                 f"<b>PipeWire</b>     {pw_v}<br>"
                 f"<b>WirePlumber</b>  {wp_v}<br><br>"
-                f"<b>{self.i18n.tr('outputs')}</b>      {sinks} {detected_str}<br>"
-                f"<b>{self.i18n.tr('inputs')}</b>      {sources} {detected_str}<br><br>"
-                f"<b>{self.i18n.tr('frequencies')}</b>   {rates_str}<br><br>"
-                f"<b>{self.i18n.tr('buffer')}</b>       {quantum} {self.i18n.tr('samples')}<br>"
-                f"<b>{self.i18n.tr('latence')}</b>      {latency_ms:.1f} {self.i18n.tr('milliseconds')} ({rate} {self.i18n.tr('hz')})<br><br>"
-                f"<b>{self.i18n.tr('xruns')}</b>        {xruns}<br><br>"
+                f"<b>{self.tr('Outputs')}</b>      {sinks} {detected_str}<br>"
+                f"<b>{self.tr('Inputs')}</b>      {sources} {detected_str}<br><br>"
+                f"<b>{self.tr('Rates')}</b>   {rates_str}<br><br>"
+                f"<b>{self.tr('Buffer')}</b>       {quantum} {self.tr('samples')}<br>"
+                f"<b>{self.tr('Latency')}</b>      {latency_ms:.1f} {self.tr('milliseconds')} ({rate} {self.tr('Hz')})<br><br>"
+                f"<b>{self.tr('Xruns')}</b>        {xruns}<br><br>"
                 f"<b>AES67</b>        {aes67_state}<br>"
                 f"<b>PTP</b>          {ptp_state}"
             )
         except Exception as e:
-            self.sys_text.setHtml(f"Erreur : {e}")
+            self.sys_text.setHtml(f"Error: {e}")
     
     def _get_xruns(self):
         try:
             r = subprocess.run(['pw-top', '-b', '-n1'], capture_output=True, text=True, timeout=3)
             total = sum(int(m.group(1)) for m in re.finditer(r'xrun\S*\s+(\d+)', r.stdout))
-            return self.i18n.tr('since_start').format(total=total)
+            return self.tr("{total} since start").format(total=total)
         except Exception:
-            return self.i18n.tr('not_available')
+            return self.tr("Not available")
     
     def _get_aes67_state(self):
         config_file = os.path.expanduser('~/.config/pipewire/pipewire.conf.d/20-aes67-session.conf')
         if os.path.exists(config_file):
-            return self.i18n.tr('enabled')
-        return self.i18n.tr('disabled')
+            return self.tr("Enabled")
+        return self.tr("Disabled")
     
     def _get_ptp_state(self):
         try:
             r = subprocess.run(['systemctl', '--user', 'is-active', 'ptp4l'], capture_output=True, text=True)
             if r.stdout.strip() == 'active':
-                return self.i18n.tr('enabled')
-            return self.i18n.tr('disabled')
+                return self.tr("Enabled")
+            return self.tr("Disabled")
         except Exception:
-            return self.i18n.tr('not_available')
+            return self.tr("Not available")
     
     def _log(self, msg, color="#aaa", category=None):
         if category is None:
-            category = self.i18n.tr('category_general')
+            category = self.tr("General")
         timestamp = datetime.now().strftime("%H:%M:%S")
         self._events.append((timestamp, category, msg, color))
         if len(self._events) > 500:
@@ -328,48 +326,48 @@ class StatusTab(QWidget):
             s = self.pw.get_summary()
             
             if self._prev_rate is not None and s['rate'] != self._prev_rate:
-                self._log(self.i18n.tr('frequency_changed').format(self._prev_rate, s['rate']), "#4fc3f7", self.i18n.tr('category_audio'))
+                self._log(self.tr("Frequency changed: {old} -> {new}").format(old=self._prev_rate, new=s['rate']), "#4fc3f7", self.tr("Audio"))
             self._prev_rate = s['rate']
             
-            dev = s['default_sink']['description'] if s['default_sink'] else self.i18n.tr('none')
+            dev = s['default_sink']['description'] if s['default_sink'] else self.tr("None")
             if self._prev_device is not None and dev != self._prev_device:
-                self._log(self.i18n.tr('device_changed').format(self._prev_device, dev), "#81c784", self.i18n.tr('category_audio'))
+                self._log(self.tr("Default device changed: {old} -> {new}").format(old=self._prev_device, new=dev), "#81c784", self.tr("Audio"))
             self._prev_device = dev
             
             current = {d['name'] for d in self.pw.get_devices() if d['type'] == 'output' and d.get('state') == 'running'}
             for name in current - self._prev_stream_ids:
-                self._log(self.i18n.tr('stream_started').format(name), "#4CAF50", self.i18n.tr('category_audio'))
+                self._log(self.tr("Stream started: {name}").format(name=name), "#4CAF50", self.tr("Audio"))
             for name in self._prev_stream_ids - current:
-                self._log(self.i18n.tr('stream_stopped').format(name), "#ef5350", self.i18n.tr('category_audio'))
+                self._log(self.tr("Stream stopped: {name}").format(name=name), "#ef5350", self.tr("Audio"))
             self._prev_stream_ids = current
             
             xruns_str = self._get_xruns()
-            if xruns_str != self.i18n.tr('not_available'):
+            if xruns_str != self.tr("Not available"):
                 xruns_match = re.search(r'(\d+)', xruns_str)
                 if xruns_match:
                     current_xruns = int(xruns_match.group(1))
                     if self._prev_xruns > 0 and current_xruns > self._prev_xruns:
                         delta = current_xruns - self._prev_xruns
-                        self._log(self.i18n.tr('xrun_detected').format(delta, current_xruns), "#ff9800", self.i18n.tr('category_audio'))
+                        self._log(self.tr("Xrun detected: +{delta} (total: {total})").format(delta=delta, total=current_xruns), "#ff9800", self.tr("Audio"))
                     self._prev_xruns = current_xruns
             
             aes67_state = self._get_aes67_state()
             if self._prev_aes67_state is not None and aes67_state != self._prev_aes67_state:
-                if aes67_state == self.i18n.tr('enabled'):
-                    self._log(self.i18n.tr('aes67_activated'), "#4CAF50", self.i18n.tr('category_aes67'))
+                if aes67_state == self.tr("Enabled"):
+                    self._log(self.tr("AES67 activated"), "#4CAF50", self.tr("AES67"))
                 else:
-                    self._log(self.i18n.tr('aes67_deactivated'), "#ef5350", self.i18n.tr('category_aes67'))
+                    self._log(self.tr("AES67 deactivated"), "#ef5350", self.tr("AES67"))
             self._prev_aes67_state = aes67_state
             
             ptp_state = self._get_ptp_state()
             if self._prev_ptp_state is not None and ptp_state != self._prev_ptp_state:
-                self._log(self.i18n.tr('ptp_state_changed').format(self._prev_ptp_state, ptp_state), "#ab47bc", self.i18n.tr('category_ptp'))
+                self._log(self.tr("PTP state changed: {old} -> {new}").format(old=self._prev_ptp_state, new=ptp_state), "#ab47bc", self.tr("PTP"))
             self._prev_ptp_state = ptp_state
             
-            if ptp_state == self.i18n.tr('enabled'):
+            if ptp_state == self.tr("Enabled"):
                 desync = self._check_ptp_desync()
                 if desync:
-                    self._log(self.i18n.tr('ptp_desync'), "#ef5350", self.i18n.tr('category_ptp'))
+                    self._log(self.tr("PTP desynchronization detected"), "#ef5350", self.tr("PTP"))
             
             self._check_aes67_logs()
         except Exception:
@@ -384,7 +382,7 @@ class StatusTab(QWidget):
             if r.stdout.strip():
                 for line in r.stdout.strip().split('\n'):
                     if line and line not in self._logged_aes67_lines:
-                        self._log(line, "#00bcd4", self.i18n.tr('category_aes67'))
+                        self._log(line, "#00bcd4", self.tr("AES67"))
                         self._logged_aes67_lines.add(line)
             
             log_file = os.path.expanduser('~/.local/share/pipewire-control-center/aes67.log')
@@ -396,7 +394,7 @@ class StatusTab(QWidget):
                         for line in new_lines:
                             line = line.strip()
                             if line:
-                                self._log(line, "#00bcd4", self.i18n.tr('category_aes67'))
+                                self._log(line, "#00bcd4", self.tr("AES67"))
                         self._prev_aes67_log_size = len(lines)
         except Exception:
             pass
@@ -415,16 +413,16 @@ class StatusTab(QWidget):
         self._update_sys()
     
     def refresh_language(self):
-        self.sys_gb.setTitle(self.i18n.tr('systeme'))
-        self.events_gb.setTitle(self.i18n.tr('journal'))
-        self.refresh_sys_btn.setText(self.i18n.tr('rafraichir'))
-        self.clear_btn.setText(self.i18n.tr('effacer'))
-        self.restart_btn.setText(self.i18n.tr('redemarrer_services'))
-        self.restart_btn.setToolTip(self.i18n.tr('restart_btn_tooltip'))
-        self.clean_btn.setText(self.i18n.tr('nettoyer_configs'))
-        self.clean_btn.setToolTip(self.i18n.tr('clean_btn_tooltip'))
+        self.sys_gb.setTitle(self.tr("System"))
+        self.events_gb.setTitle(self.tr("Log"))
+        self.refresh_sys_btn.setText(self.tr("Refresh"))
+        self.clear_btn.setText(self.tr("Clear"))
+        self.restart_btn.setText(self.tr("Restart services"))
+        self.restart_btn.setToolTip(self.tr("Restart PipeWire and WirePlumber (active streams will be interrupted)"))
+        self.clean_btn.setText(self.tr("Clean configs"))
+        self.clean_btn.setToolTip(self.tr("Remove all local PipeWire and WirePlumber configurations created by PCC"))
         self.auto_scroll_cb.setText(
-            self.i18n.tr('auto_scroll_on') if self.auto_scroll_cb.isChecked() else self.i18n.tr('auto_scroll_off')
+            self.tr("Auto-scroll ON") if self.auto_scroll_cb.isChecked() else self.tr("Auto-scroll OFF")
         )
         self._update_sys()
     

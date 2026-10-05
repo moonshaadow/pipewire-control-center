@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Onglet Réglages : fréquences et buffer"""
+"""Settings tab: sample rates and buffer"""
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QStackedWidget,
     QButtonGroup, QPushButton, QLabel, QMessageBox, QListWidget,
@@ -8,18 +8,16 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
-from .i18n import I18n
 from .logger import Logger
 from .themes import get_sub_btn_style
 
 
 class SettingsTab(QWidget):
-    """Onglet Réglages avec sous-onglets Fréquences et Buffer"""
+    """Settings tab with Rates and Buffer sub-tabs"""
     
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
-        self.i18n = I18n.instance()
         self.logger = Logger.instance()
         self._init_ui()
         self._load_current_buffer()
@@ -28,7 +26,7 @@ class SettingsTab(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(8)
         
-        # Boutons de sous-onglets
+        # Sub-tab buttons
         sub_nav_layout = QHBoxLayout()
         sub_nav_layout.setContentsMargins(0, 4, 0, 4)
         sub_nav_layout.setSpacing(1)
@@ -39,8 +37,8 @@ class SettingsTab(QWidget):
         
         self.sub_buttons = []
         sub_pages = [
-            (self.i18n.tr('frequencies'), 0),
-            (self.i18n.tr('buffer'), 1)
+            (self.tr("Rates"), 0),
+            (self.tr("Buffer"), 1)
         ]
         
         for text, idx in sub_pages:
@@ -53,18 +51,19 @@ class SettingsTab(QWidget):
         sub_nav_layout.addStretch()
         layout.addLayout(sub_nav_layout)
         
-        # Stack pour les pages
+        # Stack for pages
         self.sub_stack = QStackedWidget()
         
-        # Page Fréquences
+        # Rates page
         self.freq_page = QWidget()
         freq_layout = QVBoxLayout()
         freq_layout.setSpacing(15)
         
-        self.config_gb = QGroupBox(self.i18n.tr('frequences_autorisees'))
+        self.config_gb = QGroupBox(self.tr("Allowed rates"))
         config_layout = QVBoxLayout()
         
-        config_layout.addWidget(QLabel(self.i18n.tr('frequencies_description')))
+        config_layout.addWidget(QLabel(self.tr("Allowed sample rates for PipeWire.\n"
+                                                "Changing these values restarts the audio engine.")))
         
         self.rates_list = QListWidget()
         self.rates_list.setMaximumHeight(150)
@@ -73,22 +72,22 @@ class SettingsTab(QWidget):
         
         btn_layout = QHBoxLayout()
         
-        self.add_rate_btn = QPushButton(self.i18n.tr('ajouter'))
+        self.add_rate_btn = QPushButton(self.tr("Add"))
         self.add_rate_btn.clicked.connect(self._add_rate)
         btn_layout.addWidget(self.add_rate_btn)
         
-        self.remove_rate_btn = QPushButton(self.i18n.tr('supprimer'))
+        self.remove_rate_btn = QPushButton(self.tr("Remove"))
         self.remove_rate_btn.clicked.connect(self._remove_rate)
         btn_layout.addWidget(self.remove_rate_btn)
         
         config_layout.addLayout(btn_layout)
         
         save_layout = QHBoxLayout()
-        self.save_config_btn = QPushButton(self.i18n.tr('enregistrer'))
+        self.save_config_btn = QPushButton(self.tr("Save"))
         self.save_config_btn.clicked.connect(self._save_config)
         save_layout.addWidget(self.save_config_btn)
         
-        self.remove_config_btn = QPushButton(self.i18n.tr('supprimer_config'))
+        self.remove_config_btn = QPushButton(self.tr("Remove config"))
         self.remove_config_btn.clicked.connect(self._remove_config)
         save_layout.addWidget(self.remove_config_btn)
         
@@ -99,13 +98,13 @@ class SettingsTab(QWidget):
         self.freq_page.setLayout(freq_layout)
         self.sub_stack.addWidget(self.freq_page)
         
-        # Page Buffer
+        # Buffer page
         self.buffer_page = QWidget()
         buffer_layout = QVBoxLayout()
         buffer_layout.setSpacing(12)
         
-        # Buffer global
-        self.buf_gb = QGroupBox(self.i18n.tr('buffer_global'))
+        # Global buffer
+        self.buf_gb = QGroupBox(self.tr("Global buffer"))
         buf_layout = QVBoxLayout()
         
         self.current_buf_lbl = QLabel()
@@ -117,49 +116,49 @@ class SettingsTab(QWidget):
         self.quantum_spin = QSpinBox()
         self.quantum_spin.setRange(32, 8192)
         self.quantum_spin.setSingleStep(32)
-        self.quantum_spin.setSuffix(" " + self.i18n.tr('samples'))
+        self.quantum_spin.setSuffix(" " + self.tr("samples"))
         self.quantum_spin.valueChanged.connect(self._on_quantum_changed)
-        buf_form.addRow(self.i18n.tr('buffer_global') + ":", self.quantum_spin)
+        buf_form.addRow(self.tr("Global buffer") + ":", self.quantum_spin)
         
         self.min_spin = QSpinBox()
         self.min_spin.setRange(1, 8192)
-        self.min_spin.setSuffix(" " + self.i18n.tr('samples'))
+        self.min_spin.setSuffix(" " + self.tr("samples"))
         self.min_spin.valueChanged.connect(self._on_min_changed)
-        buf_form.addRow(self.i18n.tr('buffer_minimum'), self.min_spin)
+        buf_form.addRow(self.tr("Minimum buffer"), self.min_spin)
         
         self.max_spin = QSpinBox()
         self.max_spin.setRange(2048, 16384)
-        self.max_spin.setSuffix(" " + self.i18n.tr('samples'))
+        self.max_spin.setSuffix(" " + self.tr("samples"))
         self.max_spin.valueChanged.connect(self._on_max_changed)
-        buf_form.addRow(self.i18n.tr('buffer_maximum'), self.max_spin)
+        buf_form.addRow(self.tr("Maximum buffer"), self.max_spin)
         
         self.latency_lbl = QLabel()
         self.latency_lbl.setFont(QFont("Monospace", 9))
-        buf_form.addRow(self.i18n.tr('latence_estimee'), self.latency_lbl)
+        buf_form.addRow(self.tr("Estimated latency"), self.latency_lbl)
         
         self.rate_lbl = QLabel()
         self.rate_lbl.setFont(QFont("Monospace", 9))
-        buf_form.addRow(self.i18n.tr('frequence'), self.rate_lbl)
+        buf_form.addRow(self.tr("Sample rate"), self.rate_lbl)
         
         buf_layout.addLayout(buf_form)
         
-        self.apply_btn = QPushButton(self.i18n.tr('apply'))
+        self.apply_btn = QPushButton(self.tr("Apply"))
         self.apply_btn.clicked.connect(self._apply_buffer)
         buf_layout.addWidget(self.apply_btn)
         
         self.buf_gb.setLayout(buf_layout)
         buffer_layout.addWidget(self.buf_gb)
         
-        # Préréglages
-        self.preset_gb = QGroupBox(self.i18n.tr('presets'))
+        # Presets
+        self.preset_gb = QGroupBox(self.tr("Presets"))
         preset_layout = QHBoxLayout()
         
         presets = [
-            (self.i18n.tr('preset_gaming'), 128),
-            (self.i18n.tr('preset_network'), 256),
-            (self.i18n.tr('preset_music'), 512),
-            (self.i18n.tr('preset_video'), 1024),
-            (self.i18n.tr('preset_desktop'), 2048),
+            (self.tr("Gaming"), 128),
+            (self.tr("Network"), 256),
+            (self.tr("Music"), 512),
+            (self.tr("Video"), 1024),
+            (self.tr("Desktop"), 2048),
         ]
         
         preset_style = """
@@ -180,18 +179,18 @@ class SettingsTab(QWidget):
         self.preset_gb.setLayout(preset_layout)
         buffer_layout.addWidget(self.preset_gb)
         
-        # Buffers des périphériques
-        self.devices_gb = QGroupBox(self.i18n.tr('buffers_alsa'))
+        # Device buffers
+        self.devices_gb = QGroupBox(self.tr("ALSA buffers"))
         devices_layout = QVBoxLayout()
         
         self.devices_tree = QTreeWidget()
         self.devices_tree.setHeaderLabels([
-            self.i18n.tr('description'), "ALSA", self.i18n.tr('channels'), "Total"
+            self.tr("Description"), "ALSA", self.tr("Channels"), "Total"
         ])
         self.devices_tree.setColumnWidth(0, 200)
         devices_layout.addWidget(self.devices_tree)
         
-        note_lbl = QLabel(self.i18n.tr('buffer_note'))
+        note_lbl = QLabel(self.tr("ALSA period values are read-only and depend on driver configuration."))
         note_lbl.setFont(QFont("Monospace", 8))
         note_lbl.setWordWrap(True)
         devices_layout.addWidget(note_lbl)
@@ -204,18 +203,18 @@ class SettingsTab(QWidget):
         
         layout.addWidget(self.sub_stack)
         
-        # Sélection par défaut
+        # Default selection
         self.sub_buttons[0].setChecked(True)
         self.sub_btn_group.idClicked.connect(self.sub_stack.setCurrentIndex)
         
-        # Timer pour le refresh des buffers ALSA
+        # Timer to refresh ALSA buffers
         self.timer = QTimer()
         self.timer.timeout.connect(self._refresh_device_buffers)
         
         self.setLayout(layout)
     
     def set_theme_colors(self, colors):
-        """Applique les couleurs du thème aux sous-onglets et aux labels"""
+        """Apply theme colors to sub-tabs and labels"""
         sub_btn_style = get_sub_btn_style(colors)
         for btn in self.sub_buttons:
             btn.setStyleSheet(sub_btn_style)
@@ -253,10 +252,10 @@ class SettingsTab(QWidget):
         available = [r for r in all_rates if int(r) not in current]
         
         if not available:
-            QMessageBox.information(self, self.i18n.tr('info'), self.i18n.tr('all_frequencies_added'))
+            QMessageBox.information(self, self.tr("Info"), self.tr("All frequencies are already added"))
             return
         
-        rate, ok = QInputDialog.getItem(self, self.i18n.tr('add_frequency'), self.i18n.tr('frequency'), available, 0, False)
+        rate, ok = QInputDialog.getItem(self, self.tr("Add frequency"), self.tr("Frequency"), available, 0, False)
         if ok and rate:
             item = QListWidgetItem(f"{rate} Hz")
             item.setData(Qt.ItemDataRole.UserRole, int(rate))
@@ -267,12 +266,12 @@ class SettingsTab(QWidget):
         if item:
             self.rates_list.takeItem(self.rates_list.row(item))
         else:
-            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('select_frequency'))
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Please select a frequency"))
     
     def _save_config(self):
         rates = [self.rates_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.rates_list.count())]
         if not rates:
-            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('list_empty'))
+            QMessageBox.warning(self, self.tr("Error"), self.tr("The list is empty"))
             return
         
         if self.pw.write_allowed_rates(rates):
@@ -281,18 +280,19 @@ class SettingsTab(QWidget):
             if main_window and hasattr(main_window, 'statusBar'):
                 rates_str = ', '.join(str(r) for r in rates)
                 main_window.statusBar().showMessage(
-                    self.i18n.tr('frequencies_saved').format(rates=rates_str),
+                    self.tr("Frequencies saved: {rates}").format(rates=rates_str),
                     3000
                 )
         else:
-            self.logger.error("Échec écriture fréquences")
-            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('config_error'))
+            self.logger.error("Frequency write failed")
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Configuration error"))
     
     def _remove_config(self):
         reply = QMessageBox.question(
             self,
-            self.i18n.tr('confirmation'),
-            self.i18n.tr('remove_config_confirm'),
+            self.tr("Confirmation"),
+            self.tr("Remove the frequency configuration file?\n"
+                    "Allowed rates will return to defaults."),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
@@ -301,11 +301,11 @@ class SettingsTab(QWidget):
                 main_window = self.window()
                 if main_window and hasattr(main_window, 'statusBar'):
                     main_window.statusBar().showMessage(
-                        self.i18n.tr('frequency_config_removed'),
+                        self.tr("Frequency configuration removed"),
                         3000
                     )
             else:
-                QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('config_error'))
+                QMessageBox.warning(self, self.tr("Error"), self.tr("Configuration error"))
     
     def _load_current_buffer(self):
         try:
@@ -325,11 +325,11 @@ class SettingsTab(QWidget):
             self.min_spin.blockSignals(False)
             self.max_spin.blockSignals(False)
             
-            self.current_buf_lbl.setText(self.i18n.tr('buffer_actuel').format(quantum))
+            self.current_buf_lbl.setText(self.tr("Current buffer: {quantum} samples").format(quantum=quantum))
             self._update_latency_estimate()
             self._update_rate_label()
         except Exception as e:
-            self.logger.error(f"Erreur chargement buffer: {e}")
+            self.logger.error(f"Buffer load error: {e}")
     
     def _on_quantum_changed(self, value):
         if value < self.min_spin.value():
@@ -355,22 +355,22 @@ class SettingsTab(QWidget):
         
         if min_q >= max_q:
             QMessageBox.warning(
-                self, self.i18n.tr('error_title'),
-                f"Le minimum ({min_q}) doit être inférieur au maximum ({max_q})"
+                self, self.tr("Error"),
+                self.tr("Minimum ({min}) must be lower than maximum ({max})").format(min=min_q, max=max_q)
             )
             return False
         
         if quantum < min_q:
             QMessageBox.warning(
-                self, self.i18n.tr('error_title'),
-                f"Le buffer global ({quantum}) est inférieur au minimum ({min_q})"
+                self, self.tr("Error"),
+                self.tr("Global buffer ({quantum}) is lower than minimum ({min})").format(quantum=quantum, min=min_q)
             )
             return False
         
         if quantum > max_q:
             QMessageBox.warning(
-                self, self.i18n.tr('error_title'),
-                f"Le buffer global ({quantum}) est supérieur au maximum ({max_q})"
+                self, self.tr("Error"),
+                self.tr("Global buffer ({quantum}) is higher than maximum ({max})").format(quantum=quantum, max=max_q)
             )
             return False
         
@@ -380,11 +380,11 @@ class SettingsTab(QWidget):
         rate = self.pw.get_rate()
         quantum = self.quantum_spin.value()
         latency_ms = (quantum / rate) * 1000
-        self.latency_lbl.setText(f"{latency_ms:.1f} {self.i18n.tr('milliseconds')}")
+        self.latency_lbl.setText(f"{latency_ms:.1f} {self.tr('milliseconds')}")
     
     def _update_rate_label(self):
         rate = self.pw.get_rate()
-        self.rate_lbl.setText(f"{rate} {self.i18n.tr('hz')}")
+        self.rate_lbl.setText(f"{rate} {self.tr('Hz')}")
     
     def _apply_buffer(self):
         if not self._validate_ranges():
@@ -400,17 +400,17 @@ class SettingsTab(QWidget):
         ok &= self.pw.set_max_quantum(max_q)
         
         if ok:
-            self.current_buf_lbl.setText(self.i18n.tr('buffer_actuel').format(quantum))
-            self.logger.info(f"Buffer appliqué: quantum={quantum}, min={min_q}, max={max_q}")
+            self.current_buf_lbl.setText(self.tr("Current buffer: {quantum} samples").format(quantum=quantum))
+            self.logger.info(f"Buffer applied: quantum={quantum}, min={min_q}, max={max_q}")
             main_window = self.window()
             if main_window and hasattr(main_window, 'statusBar'):
                 main_window.statusBar().showMessage(
-                    self.i18n.tr('buffer_applied_status').format(quantum=quantum),
+                    self.tr("Buffer applied: {quantum} samples").format(quantum=quantum),
                     3000
                 )
         else:
-            self.logger.error("Échec de l'application du buffer")
-            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('buffer_apply_error'))
+            self.logger.error("Buffer application failed")
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Cannot apply buffer"))
     
     def _refresh_device_buffers(self):
         try:
@@ -450,7 +450,7 @@ class SettingsTab(QWidget):
                 
                 self.devices_tree.addTopLevelItem(item_widget)
         except Exception as e:
-            self.logger.error(f"Erreur refresh buffers ALSA: {e}")
+            self.logger.error(f"ALSA buffer refresh error: {e}")
     
     def load_current(self):
         self._load_current_buffer()
@@ -466,17 +466,17 @@ class SettingsTab(QWidget):
         self._update_rate_label()
     
     def refresh_language(self):
-        self.sub_buttons[0].setText(self.i18n.tr('frequencies'))
-        self.sub_buttons[1].setText(self.i18n.tr('buffer'))
-        self.config_gb.setTitle(self.i18n.tr('frequences_autorisees'))
-        self.add_rate_btn.setText(self.i18n.tr('ajouter'))
-        self.remove_rate_btn.setText(self.i18n.tr('supprimer'))
-        self.save_config_btn.setText(self.i18n.tr('enregistrer'))
-        self.remove_config_btn.setText(self.i18n.tr('supprimer_config'))
-        self.buf_gb.setTitle(self.i18n.tr('buffer_global'))
-        self.preset_gb.setTitle(self.i18n.tr('presets'))
-        self.devices_gb.setTitle(self.i18n.tr('buffers_alsa'))
-        self.apply_btn.setText(self.i18n.tr('apply'))
+        self.sub_buttons[0].setText(self.tr("Rates"))
+        self.sub_buttons[1].setText(self.tr("Buffer"))
+        self.config_gb.setTitle(self.tr("Allowed rates"))
+        self.add_rate_btn.setText(self.tr("Add"))
+        self.remove_rate_btn.setText(self.tr("Remove"))
+        self.save_config_btn.setText(self.tr("Save"))
+        self.remove_config_btn.setText(self.tr("Remove config"))
+        self.buf_gb.setTitle(self.tr("Global buffer"))
+        self.preset_gb.setTitle(self.tr("Presets"))
+        self.devices_gb.setTitle(self.tr("ALSA buffers"))
+        self.apply_btn.setText(self.tr("Apply"))
         self._update_latency_estimate()
         self._update_rate_label()
     

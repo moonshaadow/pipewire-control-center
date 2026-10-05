@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # ui/profiles_tab.py
-"""Onglet de gestion des profils"""
+"""Profiles management tab"""
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget,
     QPushButton, QInputDialog, QMessageBox
 )
 from PyQt6.QtCore import pyqtSignal
-from .i18n import I18n
 from .logger import Logger
 
 class ProfilesTab(QWidget):
@@ -16,7 +15,6 @@ class ProfilesTab(QWidget):
         super().__init__()
         self.pw = pw
         self.config_mgr = config_mgr
-        self.i18n = I18n.instance()
         self.logger = Logger.instance()
         self._init_ui()
         self._refresh_list()
@@ -29,15 +27,15 @@ class ProfilesTab(QWidget):
         
         btn_layout = QHBoxLayout()
         
-        self.save_btn = QPushButton(self.i18n.tr('sauvegarder_etat'))
+        self.save_btn = QPushButton(self.tr("Save state"))
         self.save_btn.clicked.connect(self._save)
         btn_layout.addWidget(self.save_btn)
         
-        self.load_btn = QPushButton(self.i18n.tr('charger'))
+        self.load_btn = QPushButton(self.tr("Load"))
         self.load_btn.clicked.connect(self._load)
         btn_layout.addWidget(self.load_btn)
         
-        self.delete_btn = QPushButton(self.i18n.tr('delete'))
+        self.delete_btn = QPushButton(self.tr("Delete"))
         self.delete_btn.clicked.connect(self._delete)
         btn_layout.addWidget(self.delete_btn)
         
@@ -49,13 +47,13 @@ class ProfilesTab(QWidget):
         self.list_widget.addItems(self.config_mgr.list_profiles())
     
     def _save(self):
-        name, ok = QInputDialog.getText(self, self.i18n.tr('save_profile'), self.i18n.tr('profile_name'))
+        name, ok = QInputDialog.getText(self, self.tr("Save profile"), self.tr("Profile name"))
         if ok and name:
             existing = self.config_mgr.load(name)
             if existing is not None:
                 reply = QMessageBox.question(
-                    self, self.i18n.tr('confirmation'),
-                    f"Le profil '{name}' existe déjà.\nVoulez-vous l'écraser ?"
+                    self, self.tr("Confirmation"),
+                    self.tr("Profile \"{name}\" already exists.\nDo you want to overwrite it?").format(name=name)
                 )
                 if reply != QMessageBox.StandardButton.Yes:
                     return
@@ -71,16 +69,16 @@ class ProfilesTab(QWidget):
                 main_window = self.window()
                 if main_window and hasattr(main_window, 'statusBar'):
                     main_window.statusBar().showMessage(
-                        self.i18n.tr('profile_saved_status').format(name=name),
+                        self.tr("Profile \"{name}\" saved").format(name=name),
                         3000
                     )
             else:
-                QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('config_error'))
+                QMessageBox.warning(self, self.tr("Error"), self.tr("Configuration error"))
     
     def _load(self):
         item = self.list_widget.currentItem()
         if not item:
-            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('select_profile'))
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Please select a profile"))
             return
         
         config = self.config_mgr.load(item.text())
@@ -94,11 +92,11 @@ class ProfilesTab(QWidget):
             main_window = self.window()
             if main_window and hasattr(main_window, 'statusBar'):
                 main_window.statusBar().showMessage(
-                    self.i18n.tr('profile_loaded_status').format(name=item.text()),
+                    self.tr("Profile \"{name}\" loaded").format(name=item.text()),
                     3000
                 )
         else:
-            QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('select_profile'))
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Please select a profile"))
     
     def _delete(self):
         item = self.list_widget.currentItem()
@@ -106,8 +104,8 @@ class ProfilesTab(QWidget):
             return
         
         reply = QMessageBox.question(
-            self, self.i18n.tr('confirmation'),
-            self.i18n.tr('confirm_delete_profile').format(item.text()),
+            self, self.tr("Confirmation"),
+            self.tr("Delete profile \"{name}\"?").format(name=item.text()),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
@@ -118,11 +116,11 @@ class ProfilesTab(QWidget):
             main_window = self.window()
             if main_window and hasattr(main_window, 'statusBar'):
                 main_window.statusBar().showMessage(
-                    self.i18n.tr('profile_deleted_status').format(name=profile_name),
+                    self.tr("Profile \"{name}\" deleted").format(name=profile_name),
                     3000
                 )
     
     def refresh_language(self):
-        self.save_btn.setText(self.i18n.tr('sauvegarder_etat'))
-        self.load_btn.setText(self.i18n.tr('charger'))
-        self.delete_btn.setText(self.i18n.tr('delete'))
+        self.save_btn.setText(self.tr("Save state"))
+        self.load_btn.setText(self.tr("Load"))
+        self.delete_btn.setText(self.tr("Delete"))

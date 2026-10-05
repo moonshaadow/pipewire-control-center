@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fenêtre principale avec navigation par boutons"""
+"""Main window with button navigation"""
 import os, re, locale, json
 from PyQt6.QtWidgets import (
     QMainWindow, QStatusBar, QWidget, QVBoxLayout, QHBoxLayout,
@@ -22,10 +22,9 @@ from .profiles_tab import ProfilesTab
 from .status_tab import StatusTab
 from .aes67_tab import Aes67Tab
 from .fx_tab import FXTab
-from .i18n import I18n, get_system_lang
 from .logger import Logger
 
-# --- Couleurs ---
+# --- Colors ---
 def _hex_to_rgb(h): return tuple(int(h.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) if len(h.lstrip('#')) == 6 else None
 def _darken(h, f=0.85): return f"#{''.join(f'{min(255, int(c*f)):02x}' for c in _hex_to_rgb(h))}" if _hex_to_rgb(h) else h
 def _lighten(h, f=1.15): return f"#{''.join(f'{min(255, int(c*f)):02x}' for c in _hex_to_rgb(h))}" if _hex_to_rgb(h) else h
@@ -50,7 +49,7 @@ def _get_gtk_bg():
     except: pass
     return None
 
-# --- Configuration UI ---
+# --- UI Configuration ---
 class UIConfig:
     def __init__(self):
         self.config_file = os.path.expanduser('~/.config/pipewire-control-center/ui-config.json')
@@ -102,11 +101,6 @@ class UIConfig:
         self.config = self.default_config.copy()
         return self.save()
     
-    def get_lang(self):
-        if self.config['language'] == 'auto':
-            return get_system_lang()
-        return self.config['language']
-    
     def get_theme(self):
         theme = self.config.get('theme', 'auto')
         if theme == 'auto':
@@ -123,14 +117,12 @@ class UIConfig:
             return self.config.get('experimental_features', False) and self.config['visible_tabs'].get(tab_key, False)
         return self.config['visible_tabs'].get(tab_key, True)
 
-# --- Dialog de configuration ---
+# --- Settings Dialog ---
 class SettingsDialog(QDialog):
     def __init__(self, ui_config, parent=None):
         super().__init__(parent)
         self.ui_config = ui_config
-        self.i18n = I18n.instance()
-        self.lang = self.i18n.get_lang()
-        self.setWindowTitle(self.i18n.tr('settings'))
+        self.setWindowTitle(self.tr("Settings"))
         self.setMinimumWidth(500)
         
         layout = QVBoxLayout(self)
@@ -138,41 +130,41 @@ class SettingsDialog(QDialog):
         form_layout = QFormLayout()
         
         self.lang_combo = QComboBox()
-        self.lang_combo.addItem(self.i18n.tr('lang_auto'), 'auto')
-        self.lang_combo.addItem(self.i18n.tr('lang_fr'), 'fr')
-        self.lang_combo.addItem(self.i18n.tr('lang_en'), 'en')
+        self.lang_combo.addItem(self.tr("Automatic"), 'auto')
+        self.lang_combo.addItem(self.tr("French"), 'fr')
+        self.lang_combo.addItem(self.tr("English"), 'en')
         current_lang = ui_config.config['language']
         idx = self.lang_combo.findData(current_lang)
         if idx >= 0:
             self.lang_combo.setCurrentIndex(idx)
-        form_layout.addRow(self.i18n.tr('language') + ':', self.lang_combo)
+        form_layout.addRow(self.tr("Language") + ':', self.lang_combo)
         
         self.theme_combo = QComboBox()
-        self.theme_combo.addItem(self.i18n.tr('theme_auto'), 'auto')
-        self.theme_combo.addItem(self.i18n.tr('theme_gtk_dark'), 'gtk_dark')
-        self.theme_combo.addItem(self.i18n.tr('theme_gtk_light'), 'gtk_light')
-        self.theme_combo.addItem(self.i18n.tr('theme_dark_alt'), 'dark_alt')
+        self.theme_combo.addItem(self.tr("Automatic"), 'auto')
+        self.theme_combo.addItem(self.tr("GTK Dark"), 'gtk_dark')
+        self.theme_combo.addItem(self.tr("GTK Light"), 'gtk_light')
+        self.theme_combo.addItem(self.tr("Dark Alt"), 'dark_alt')
         current_theme = ui_config.config.get('theme', 'auto')
         idx = self.theme_combo.findData(current_theme)
         if idx >= 0:
             self.theme_combo.setCurrentIndex(idx)
-        form_layout.addRow(self.i18n.tr('theme') + ':', self.theme_combo)
+        form_layout.addRow(self.tr("Theme") + ':', self.theme_combo)
         
         self.close_combo = QComboBox()
-        self.close_combo.addItem(self.i18n.tr('close_tray'), 'tray')
-        self.close_combo.addItem(self.i18n.tr('close_quit'), 'quit')
+        self.close_combo.addItem(self.tr("Minimize to tray"), 'tray')
+        self.close_combo.addItem(self.tr("Quit"), 'quit')
         current_close = ui_config.config.get('close_behavior', 'tray')
         idx = self.close_combo.findData(current_close)
         if idx >= 0:
             self.close_combo.setCurrentIndex(idx)
-        form_layout.addRow(self.i18n.tr('close_behavior') + ':', self.close_combo)
+        form_layout.addRow(self.tr("Close behavior") + ':', self.close_combo)
         
-        self.experimental_cb = QCheckBox(self.i18n.tr('enable_experimental'))
+        self.experimental_cb = QCheckBox(self.tr("Enable experimental features"))
         self.experimental_cb.setChecked(ui_config.config.get('experimental_features', False))
         self.experimental_cb.toggled.connect(self._on_experimental_toggled)
         form_layout.addRow('', self.experimental_cb)
         
-        self.experimental_warning = QLabel(self.i18n.tr('experimental_warning'))
+        self.experimental_warning = QLabel(self.tr("Experimental features may be unstable. Use at your own risk."))
         self.experimental_warning.setFont(QFont("Monospace", 8))
         self.experimental_warning.setStyleSheet("color: #ff9800;")
         self.experimental_warning.setWordWrap(True)
@@ -180,16 +172,16 @@ class SettingsDialog(QDialog):
         form_layout.addRow('', self.experimental_warning)
         
         tab_keys = [
-            ('settings', 'Réglages / Settings'),
-            ('routing', 'Routing (expérimental)'),
-            ('profiles', 'Profils / Profiles'),
-            ('aes67', 'AES67'),
-            ('status', 'État / Status'),
-            ('fx', 'FX (expérimental)')
+            ('settings', self.tr("Settings")),
+            ('routing', self.tr("Routing (experimental)")),
+            ('profiles', self.tr("Profiles")),
+            ('aes67', self.tr("AES67")),
+            ('status', self.tr("Status")),
+            ('fx', self.tr("FX (experimental)"))
         ]
         
         self.tab_checkboxes = {}
-        tab_group_label = QLabel(self.i18n.tr('show_tabs') + ':')
+        tab_group_label = QLabel(self.tr("Visible tabs") + ':')
         form_layout.addRow(tab_group_label)
         
         experimental_enabled = ui_config.config.get('experimental_features', False)
@@ -210,9 +202,9 @@ class SettingsDialog(QDialog):
         layout.addLayout(form_layout)
         
         button_box = QDialogButtonBox()
-        save_btn = button_box.addButton(self.i18n.tr('save'), QDialogButtonBox.ButtonRole.AcceptRole)
-        cancel_btn = button_box.addButton(self.i18n.tr('cancel'), QDialogButtonBox.ButtonRole.RejectRole)
-        reset_btn = button_box.addButton(self.i18n.tr('reset_config'), QDialogButtonBox.ButtonRole.ResetRole)
+        save_btn = button_box.addButton(self.tr("Save"), QDialogButtonBox.ButtonRole.AcceptRole)
+        cancel_btn = button_box.addButton(self.tr("Cancel"), QDialogButtonBox.ButtonRole.RejectRole)
+        reset_btn = button_box.addButton(self.tr("Reset"), QDialogButtonBox.ButtonRole.ResetRole)
         
         save_btn.clicked.connect(self._on_save)
         cancel_btn.clicked.connect(self.reject)
@@ -240,12 +232,12 @@ class SettingsDialog(QDialog):
         if self.ui_config.save():
             self.accept()
         else:
-            QMessageBox.warning(self, 'Erreur', 'Impossible de sauvegarder la configuration')
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Cannot save configuration"))
     
     def _on_reset(self):
         reply = QMessageBox.question(
-            self, self.i18n.tr('reset_config'),
-            'Voulez-vous vraiment réinitialiser la configuration ?',
+            self, self.tr("Reset configuration"),
+            self.tr("Do you really want to reset the configuration?"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
@@ -262,22 +254,19 @@ class SettingsDialog(QDialog):
                     else:
                         cb.setChecked(True)
                         cb.setEnabled(True)
-                QMessageBox.information(self, 'OK', self.i18n.tr('config_reset'))
+                QMessageBox.information(self, "OK", self.tr("Configuration reset"))
 
-# --- Fenêtre principale ---
+# --- Main Window ---
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.pw = PipeWireManager()
         self.config_mgr = ConfigManager()
         self.ui_config = UIConfig()
-        self.i18n = I18n.instance()
-        self.i18n.set_ui_config(self.ui_config)
-        self.lang = self.i18n.get_lang()
         self.logger = Logger.instance()
         
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        self.setWindowTitle(self.i18n.tr('title'))
+        self.setWindowTitle(self.tr("PipeWire Control Center"))
         self.setMinimumSize(700, 500)
         
         self._drag_pos = None
@@ -301,11 +290,11 @@ class MainWindow(QMainWindow):
         central.setLayout(layout)
         self.setCentralWidget(central)
         
-        # Création immédiate des onglets légers et essentiels
+        # Immediate creation of lightweight and essential tabs
         self.audio_tab = AudioTab(self.pw)
         self.profiles_tab = ProfilesTab(self.pw, self.config_mgr)
         
-        # Les autres onglets sont créés à la demande (lazy loading)
+        # Other tabs are created on demand (lazy loading)
         self.all_tabs = {
             'output': self.audio_tab,
             'settings': None,
@@ -324,17 +313,17 @@ class MainWindow(QMainWindow):
         self.profiles_tab.profile_loaded.connect(lambda: (
             self.audio_tab.load_current(),
             self.all_tabs['settings'].load_current() if self.all_tabs['settings'] else None,
-            self.statusBar().showMessage(self.i18n.tr('profile_loaded'), 5000)
+            self.statusBar().showMessage(self.tr("Profile loaded"), 5000)
         ))
-        self.statusBar().showMessage(self.i18n.tr('ready').format(self.pw.get_version()), 5000)
+        self.statusBar().showMessage(self.tr("Ready - PipeWire {}").format(self.pw.get_version()), 5000)
         
         self._restore_geometry()
         self._install_shortcuts()
         
-        # Appliquer le thème après création des onglets
+        # Apply theme after tabs creation
         self._apply_theme()
         
-        # Arrondir les angles
+        # Rounded corners
         self._apply_rounded_corners(12)
     
     def _apply_rounded_corners(self, radius=12):
@@ -350,7 +339,7 @@ class MainWindow(QMainWindow):
             self._apply_rounded_corners(12)
     
     def _get_theme_colors(self):
-        """Retourne les couleurs selon le thème"""
+        """Return colors according to theme"""
         from .themes import THEMES
         
         theme = self.ui_config.get_theme()
@@ -371,7 +360,7 @@ class MainWindow(QMainWindow):
         return THEMES['dark_alt'].copy()
     
     def _apply_theme(self):
-        """Applique le thème à tous les widgets"""
+        """Apply theme to all widgets"""
         colors = self._get_theme_colors()
         
         tooltip_bg = colors.get('tooltip_bg', '#2a2a2a')
@@ -456,8 +445,18 @@ class MainWindow(QMainWindow):
             }}
         """
         
+        tab_labels = {
+            'output': self.tr("Output"),
+            'settings': self.tr("Settings"),
+            'routing': self.tr("Routing"),
+            'profiles': self.tr("Profiles"),
+            'aes67': self.tr("AES67"),
+            'status': self.tr("Status"),
+            'fx': self.tr("FX"),
+        }
+        
         for idx, key in enumerate(visible_keys):
-            btn = QPushButton(self.i18n.tr(key))
+            btn = QPushButton(tab_labels.get(key, key))
             btn.setCheckable(True)
             btn.setStyleSheet(btn_style)
             self.btn_group.addButton(btn, idx)
@@ -469,7 +468,7 @@ class MainWindow(QMainWindow):
         
         settings_btn = QToolButton()
         settings_btn.setText('⋮')
-        settings_btn.setToolTip(self.i18n.tr('settings_tooltip'))
+        settings_btn.setToolTip(self.tr("Settings"))
         settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         settings_btn.setFixedWidth(28)
         settings_btn.setStyleSheet(f"""
@@ -490,7 +489,7 @@ class MainWindow(QMainWindow):
         
         min_btn = QToolButton()
         min_btn.setText("─")
-        min_btn.setToolTip("Minimiser")
+        min_btn.setToolTip(self.tr("Minimize"))
         min_btn.setFixedSize(28, 28)
         min_btn.setStyleSheet(f"""
             QToolButton {{
@@ -509,7 +508,7 @@ class MainWindow(QMainWindow):
         
         close_btn = QToolButton()
         close_btn.setText("✕")
-        close_btn.setToolTip("Fermer")
+        close_btn.setToolTip(self.tr("Close"))
         close_btn.setFixedSize(28, 28)
         close_btn.setStyleSheet("""
             QToolButton {
@@ -589,13 +588,13 @@ class MainWindow(QMainWindow):
             elif key == 'fx':
                 if self.all_tabs['fx']:
                     self.all_tabs['fx'].refresh_language()
-            self.statusBar().showMessage(self.i18n.tr('refreshed'), 2000)
+            self.statusBar().showMessage(self.tr("Refreshed"), 2000)
     
     def _refresh_all(self):
         self.audio_tab.refresh_devices()
         if self.all_tabs['status']:
             self.all_tabs['status'].refresh()
-        self.statusBar().showMessage(self.i18n.tr('full_refresh'), 2000)
+        self.statusBar().showMessage(self.tr("Full refresh"), 2000)
     
     def _quit_app(self):
         self._save_geometry()
@@ -629,7 +628,7 @@ class MainWindow(QMainWindow):
             self.tab_map[key] = self.all_tabs[key]
     
     def _create_tab(self, key):
-        """Crée un onglet à la demande"""
+        """Create a tab on demand"""
         if key == 'settings':
             return SettingsTab(self.pw)
         elif key == 'routing':
@@ -650,10 +649,8 @@ class MainWindow(QMainWindow):
     def _open_settings(self):
         dialog = SettingsDialog(self.ui_config, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.i18n.set_lang(self.ui_config.config['language'])
-            self.lang = self.i18n.get_lang()
-            self.setWindowTitle(self.i18n.tr('title'))
-            self.statusBar().showMessage(self.i18n.tr('ui_config_saved'), 3000)
+            self.setWindowTitle(self.tr("PipeWire Control Center"))
+            self.statusBar().showMessage(self.tr("UI configuration saved"), 3000)
             self._apply_theme()
             self._rebuild_navigation()
             self._rebuild_stack()

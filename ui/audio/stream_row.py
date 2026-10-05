@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Ligne flux audio avec métadonnées"""
+"""Audio stream row with metadata"""
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QLabel
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QIcon, QPixmap
 import os
 from .widgets import ClickSlider, StreamDeviceBadge
 from ..icon_utils import get_device_icon_path
-from ..i18n import I18n
 from ..logger import Logger
 
 
 class StreamRow(QFrame):
-    """Ligne flux audio avec icône, nom, métadonnées, volume et vignette périphérique"""
+    """Audio stream row with icon, name, metadata, volume and device badge"""
     volume_changed = pyqtSignal(int, float)
     device_change_requested = pyqtSignal(dict)
     
@@ -19,7 +18,6 @@ class StreamRow(QFrame):
         super().__init__()
         self.stream = stream
         self.pw = pw
-        self.i18n = I18n.instance()
         self.logger = Logger.instance()
         self.device_badge = None
         self._colors = None
@@ -77,7 +75,7 @@ class StreamRow(QFrame):
         self._update_metadata()
     
     def set_theme_colors(self, colors):
-        """Applique les couleurs du thème"""
+        """Apply theme colors"""
         self._colors = colors
         c = colors
         self.setStyleSheet(f"background-color: {c.get('btn_bg', '#2a2a2a')}; border-radius: 4px; margin: 1px 0;")
@@ -122,20 +120,20 @@ class StreamRow(QFrame):
             self.meta_lbl.setVisible(False)
     
     def set_device_badge(self, device):
-        """Ajoute ou met à jour la vignette du périphérique"""
+        """Add or update the device badge"""
         if self.device_badge is None:
             self.device_badge = StreamDeviceBadge(device)
             self.device_badge.setFixedSize(56, 56)
             self.device_badge.clicked.connect(lambda: self.device_change_requested.emit(self.stream))
             self.layout().addWidget(self.device_badge)
-            # Appliquer les couleurs du thème si disponibles
+            # Apply theme colors if available
             if self._colors:
                 self.device_badge.set_theme_colors(self._colors)
         else:
             self.device_badge.device = device
             self.device_badge.setToolTip(device.get('description', ''))
             self.device_badge.name_lbl.setText(device.get('description', '')[:12])
-            # Recharger l'icône avec les couleurs actuelles
+            # Reload icon with current colors
             self.device_badge._colors = self._colors
             self.device_badge._load_icon()
     
@@ -157,12 +155,12 @@ class StreamRow(QFrame):
             self.volume_changed.emit(self.stream.get('id', 0), value / 100.0)
     
     def _on_release(self):
-        self.logger.debug(f"Slider flux relâché: {self.stream.get('name', 'inconnu')} -> {self.slider.value()}%")
+        self.logger.debug(f"Stream slider released: {self.stream.get('name', 'unknown')} -> {self.slider.value()}%")
         self.volume_changed.emit(self.stream.get('id', 0), self.slider.value() / 100.0)
         main_window = self.window()
         if main_window and hasattr(main_window, 'statusBar'):
             main_window.statusBar().showMessage(
-                self.i18n.tr('volume_changed_status').format(
+                self.tr("Volume of {name} set to {value}%").format(
                     name=self.stream.get('name', ''),
                     value=self.slider.value()
                 ),

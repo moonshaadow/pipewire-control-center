@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Onglet de gestion AES67 via configuration native PipeWire"""
+"""AES67 management tab via native PipeWire configuration"""
 import subprocess, re, os, signal, time, socket
 from pathlib import Path
 from PyQt6.QtWidgets import (
@@ -9,14 +9,12 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
-from .i18n import I18n
 from .logger import Logger
 
 class Aes67Tab(QWidget):
     def __init__(self, pw):
         super().__init__()
         self.pw = pw
-        self.i18n = I18n.instance()
         self.logger = Logger.instance()
         self.hostname = socket.gethostname()
         self._init_ui()
@@ -32,11 +30,11 @@ class Aes67Tab(QWidget):
         layout = QVBoxLayout(scroll_widget)
         layout.setSpacing(10)
         
-        # Statut
-        self.status_gb = QGroupBox(self.i18n.tr('statut_aes67'))
+        # Status
+        self.status_gb = QGroupBox(self.tr("AES67 status"))
         status_layout = QVBoxLayout()
         
-        self.status_lbl = QLabel(self.i18n.tr('inactif'))
+        self.status_lbl = QLabel(self.tr("Inactive"))
         self.status_lbl.setFont(QFont("Monospace", 14, QFont.Weight.Bold))
         self.status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status_lbl.setStyleSheet("color: #ef5350;")
@@ -51,66 +49,66 @@ class Aes67Tab(QWidget):
         self.status_gb.setLayout(status_layout)
         layout.addWidget(self.status_gb)
         
-        # Bouton principal
-        self.toggle_btn = QPushButton(self.i18n.tr('activer_aes67'))
+        # Main button
+        self.toggle_btn = QPushButton(self.tr("Enable AES67"))
         self.toggle_btn.setStyleSheet("QPushButton { padding: 12px; font-size: 15px; font-weight: bold; color: #4CAF50; }")
         self.toggle_btn.clicked.connect(self._toggle_aes67)
         layout.addWidget(self.toggle_btn)
         
         # Configuration
-        self.config_gb = QGroupBox(self.i18n.tr('configuration_session'))
+        self.config_gb = QGroupBox(self.tr("Session configuration"))
         config_form = QFormLayout()
         
         self.mode_combo = QComboBox()
-        self.mode_combo.addItem(self.i18n.tr('emetteur'))
-        self.mode_combo.addItem(self.i18n.tr('recepteur'))
-        self.mode_combo.addItem(self.i18n.tr('les_deux'))
+        self.mode_combo.addItem(self.tr("Sender"))
+        self.mode_combo.addItem(self.tr("Receiver"))
+        self.mode_combo.addItem(self.tr("Both"))
         self.mode_combo.setCurrentIndex(0)
-        config_form.addRow(self.i18n.tr('mode'), self.mode_combo)
+        config_form.addRow(self.tr("Mode"), self.mode_combo)
         
         self.interface_combo = QComboBox()
         self._populate_interfaces()
-        config_form.addRow(self.i18n.tr('interface_reseau'), self.interface_combo)
+        config_form.addRow(self.tr("Network interface"), self.interface_combo)
         
         self.address_edit = QLineEdit("239.69.150.243")
-        config_form.addRow(self.i18n.tr('adresse_multicast'), self.address_edit)
+        config_form.addRow(self.tr("Multicast address"), self.address_edit)
         
         self.port_spin = QSpinBox()
         self.port_spin.setRange(1024, 65535)
         self.port_spin.setValue(5004)
-        config_form.addRow(self.i18n.tr('port'), self.port_spin)
+        config_form.addRow(self.tr("Port"), self.port_spin)
         
         self.channels_spin = QSpinBox()
         self.channels_spin.setRange(1, 64)
         self.channels_spin.setValue(2)
-        config_form.addRow(self.i18n.tr('canaux_sortie'), self.channels_spin)
+        config_form.addRow(self.tr("Output channels"), self.channels_spin)
         
         self.format_combo = QComboBox()
         self.format_combo.addItems(["S16BE", "S24BE"])
         self.format_combo.setCurrentText("S24BE")
-        config_form.addRow(self.i18n.tr('format'), self.format_combo)
+        config_form.addRow(self.tr("Format"), self.format_combo)
         
         self.rate_combo = QComboBox()
         self.rate_combo.addItems(["48000", "96000", "192000"])
         self.rate_combo.setCurrentText("48000")
-        config_form.addRow(self.i18n.tr('frequence'), self.rate_combo)
+        config_form.addRow(self.tr("Sample rate"), self.rate_combo)
         
         self.latency_spin = QSpinBox()
         self.latency_spin.setRange(1, 100)
         self.latency_spin.setValue(5)
-        self.latency_spin.setSuffix(" " + self.i18n.tr('milliseconds'))
-        config_form.addRow(self.i18n.tr('latence'), self.latency_spin)
+        self.latency_spin.setSuffix(" " + self.tr("milliseconds"))
+        config_form.addRow(self.tr("Latency"), self.latency_spin)
         
         self.ttl_spin = QSpinBox()
         self.ttl_spin.setRange(1, 255)
         self.ttl_spin.setValue(32)
         config_form.addRow("TTL:", self.ttl_spin)
         
-        self.ptp_cb = QCheckBox(self.i18n.tr('synchronisation_ptp'))
+        self.ptp_cb = QCheckBox(self.tr("PTP synchronization"))
         self.ptp_cb.setChecked(False)
         config_form.addRow(self.ptp_cb)
         
-        self.ptp_master_cb = QCheckBox(self.i18n.tr('devenir_maitre'))
+        self.ptp_master_cb = QCheckBox(self.tr("Become master"))
         self.ptp_master_cb.setChecked(False)
         config_form.addRow(self.ptp_master_cb)
         
@@ -118,15 +116,15 @@ class Aes67Tab(QWidget):
         layout.addWidget(self.config_gb)
         
         # Note
-        note_lbl = QLabel(self.i18n.tr('aes67_note'))
+        note_lbl = QLabel(self.tr("AES67 note"))
         note_lbl.setFont(QFont("Monospace", 8))
         note_lbl.setStyleSheet("color: #888; padding: 4px;")
         note_lbl.setWordWrap(True)
         layout.addWidget(note_lbl)
         
-        # Nettoyage
+        # Cleanup
         clean_layout = QHBoxLayout()
-        self.clean_btn = QPushButton(self.i18n.tr('supprimer_config_aes67'))
+        self.clean_btn = QPushButton(self.tr("Remove AES67 configuration"))
         self.clean_btn.clicked.connect(self._remove_config)
         clean_layout.addWidget(self.clean_btn)
         layout.addLayout(clean_layout)
@@ -153,7 +151,7 @@ class Aes67Tab(QWidget):
                         if iface != 'lo':
                             self.interface_combo.addItem(iface)
         except Exception as e:
-            self.logger.error(f"Erreur: {e}")
+            self.logger.error(f"Error: {e}")
         if self.interface_combo.count() == 0:
             self.interface_combo.addItem("eth0")
     
@@ -230,7 +228,7 @@ ptp_master={str(self.ptp_master_cb.isChecked()).lower()}
             self._prefs_file.parent.mkdir(parents=True, exist_ok=True)
             self._prefs_file.write_text(prefs)
         except Exception as e:
-            self.logger.error(f"Erreur: {e}")
+            self.logger.error(f"Error: {e}")
     
     def _set_config_enabled(self, enabled):
         self.mode_combo.setEnabled(enabled)
@@ -247,15 +245,15 @@ ptp_master={str(self.ptp_master_cb.isChecked()).lower()}
     
     def _update_status(self):
         if self._config_file.exists():
-            self.status_lbl.setText(self.i18n.tr('actif'))
+            self.status_lbl.setText(self.tr("Active"))
             self.status_lbl.setStyleSheet("color: #4CAF50; font-size: 14px; font-weight: bold;")
-            self.toggle_btn.setText(self.i18n.tr('desactiver_aes67'))
+            self.toggle_btn.setText(self.tr("Disable AES67"))
             self.toggle_btn.setStyleSheet("QPushButton { padding: 12px; font-size: 15px; font-weight: bold; color: #ef5350; }")
             self._set_config_enabled(False)
         else:
-            self.status_lbl.setText(self.i18n.tr('inactif'))
+            self.status_lbl.setText(self.tr("Inactive"))
             self.status_lbl.setStyleSheet("color: #ef5350; font-size: 14px; font-weight: bold;")
-            self.toggle_btn.setText(self.i18n.tr('activer_aes67'))
+            self.toggle_btn.setText(self.tr("Enable AES67"))
             self.toggle_btn.setStyleSheet("QPushButton { padding: 12px; font-size: 15px; font-weight: bold; color: #4CAF50; }")
             self._set_config_enabled(True)
         
@@ -267,15 +265,15 @@ ptp_master={str(self.ptp_master_cb.isChecked()).lower()}
                         capture_output=True, text=True
                     )
                     if result.stdout.strip() == 'active':
-                        self.ptp_lbl.setText(self.i18n.tr('ptp_actif'))
+                        self.ptp_lbl.setText(self.tr("PTP: active"))
                         self.ptp_lbl.setStyleSheet("color: #4CAF50;")
                     else:
-                        self.ptp_lbl.setText(self.i18n.tr('ptp_inactif'))
+                        self.ptp_lbl.setText(self.tr("PTP: inactive"))
                         self.ptp_lbl.setStyleSheet("color: #ef5350;")
                 except Exception:
-                    self.ptp_lbl.setText("PTP : ?")
+                    self.ptp_lbl.setText("PTP: ?")
             else:
-                self.ptp_lbl.setText(self.i18n.tr('ptp_non_installe'))
+                self.ptp_lbl.setText(self.tr("PTP: not installed"))
                 self.ptp_lbl.setStyleSheet("color: #ff9800;")
         else:
             self.ptp_lbl.setText("")
@@ -332,7 +330,7 @@ WantedBy=default.target
                 main_window = self.window()
                 if main_window and hasattr(main_window, 'statusBar'):
                     main_window.statusBar().showMessage(
-                        self.i18n.tr('ptp_started'),
+                        self.tr("PTP started"),
                         3000
                     )
                 return True
@@ -347,7 +345,7 @@ WantedBy=default.target
                 main_window = self.window()
                 if main_window and hasattr(main_window, 'statusBar'):
                     main_window.statusBar().showMessage(
-                        self.i18n.tr('ptp_stopped'),
+                        self.tr("PTP stopped"),
                         3000
                     )
                 return True
@@ -367,8 +365,9 @@ WantedBy=default.target
             if not self._check_ptp4l_installed():
                 reply = QMessageBox.question(
                     self,
-                    self.i18n.tr('ptp_install_question'),
-                    self.i18n.tr('ptp_install_message'),
+                    self.tr("Install PTP?"),
+                    self.tr("linuxptp is required for PTP synchronization.\n"
+                            "Do you want to install it now?"),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.Yes
                 )
@@ -376,15 +375,17 @@ WantedBy=default.target
                     try:
                         subprocess.run(['pkexec', 'apt', 'install', '-y', 'linuxptp'], check=True)
                     except Exception:
-                        QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('ptp_install_error'))
+                        QMessageBox.warning(self, self.tr("Error"), self.tr("PTP installation failed"))
                         return
                 else:
                     return
         
         reply = QMessageBox.warning(
             self,
-            self.i18n.tr('aes67_enable_warning'),
-            self.i18n.tr('aes67_activate_confirm'),
+            self.tr("Enable AES67"),
+            self.tr("Enabling AES67 will restart PipeWire and WirePlumber services.\n"
+                    "Active audio streams will be interrupted.\n\n"
+                    "Do you want to continue?"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
@@ -394,7 +395,7 @@ WantedBy=default.target
         
         if self.ptp_cb.isChecked():
             if not self._start_ptp():
-                QMessageBox.warning(self, self.i18n.tr('error_title'), self.i18n.tr('ptp_start_error'))
+                QMessageBox.warning(self, self.tr("Error"), self.tr("Cannot start PTP"))
                 return
         
         config = self._generate_modules_only()
@@ -410,19 +411,21 @@ WantedBy=default.target
             main_window = self.window()
             if main_window and hasattr(main_window, 'statusBar'):
                 main_window.statusBar().showMessage(
-                    self.i18n.tr('aes67_enabled_status'),
+                    self.tr("AES67 enabled"),
                     3000
                 )
         else:
-            QMessageBox.warning(self, self.i18n.tr('error_title'), f"{self.i18n.tr('restart_error')} : {msg}")
+            QMessageBox.warning(self, self.tr("Error"), f"{self.tr('Restart error')}: {msg}")
         
         self._update_status()
     
     def _remove_config(self):
         reply = QMessageBox.question(
             self,
-            self.i18n.tr('confirmation'),
-            self.i18n.tr('aes67_restart_confirm')
+            self.tr("Confirmation"),
+            self.tr("Removing AES67 configuration will restart PipeWire services.\n"
+                    "Active audio streams will be interrupted.\n\n"
+                    "Do you want to continue?")
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
@@ -431,7 +434,7 @@ WantedBy=default.target
             if self._config_file.exists():
                 self._config_file.unlink()
         except Exception as e:
-            QMessageBox.warning(self, self.i18n.tr('error_title'), f"{self.i18n.tr('error_generic')} : {e}")
+            QMessageBox.warning(self, self.tr("Error"), f"{self.tr('Generic error')}: {e}")
             return
         
         if self.ptp_cb.isChecked():
@@ -442,11 +445,11 @@ WantedBy=default.target
             main_window = self.window()
             if main_window and hasattr(main_window, 'statusBar'):
                 main_window.statusBar().showMessage(
-                    self.i18n.tr('aes67_config_removed_status'),
+                    self.tr("AES67 configuration removed"),
                     3000
                 )
         else:
-            QMessageBox.warning(self, self.i18n.tr('error_title'), f"{self.i18n.tr('restart_error')} : {msg}")
+            QMessageBox.warning(self, self.tr("Error"), f"{self.tr('Restart error')}: {msg}")
         
         self._update_status()
     
@@ -539,18 +542,18 @@ WantedBy=default.target
         return f"context.modules = [\n{',\n'.join(modules)}\n]\n"
     
     def refresh_language(self):
-        self.status_gb.setTitle(self.i18n.tr('statut_aes67'))
-        self.config_gb.setTitle(self.i18n.tr('configuration_session'))
-        self.clean_btn.setText(self.i18n.tr('supprimer_config_aes67'))
-        self.ptp_cb.setText(self.i18n.tr('synchronisation_ptp'))
-        self.ptp_master_cb.setText(self.i18n.tr('devenir_maitre'))
-        self.latency_spin.setSuffix(" " + self.i18n.tr('milliseconds'))
+        self.status_gb.setTitle(self.tr("AES67 status"))
+        self.config_gb.setTitle(self.tr("Session configuration"))
+        self.clean_btn.setText(self.tr("Remove AES67 configuration"))
+        self.ptp_cb.setText(self.tr("PTP synchronization"))
+        self.ptp_master_cb.setText(self.tr("Become master"))
+        self.latency_spin.setSuffix(" " + self.tr("milliseconds"))
         
         current_mode = self.mode_combo.currentIndex()
         self.mode_combo.clear()
-        self.mode_combo.addItem(self.i18n.tr('emetteur'))
-        self.mode_combo.addItem(self.i18n.tr('recepteur'))
-        self.mode_combo.addItem(self.i18n.tr('les_deux'))
+        self.mode_combo.addItem(self.tr("Sender"))
+        self.mode_combo.addItem(self.tr("Receiver"))
+        self.mode_combo.addItem(self.tr("Both"))
         self.mode_combo.setCurrentIndex(current_mode)
         
         self._update_status()

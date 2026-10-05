@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Utilitaires d'icônes partagés"""
+"""Shared icon utilities"""
 import os
 
 ICON_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "icons")
@@ -8,9 +8,9 @@ ICON_DIR_DARK = os.path.join(ICON_DIR, "dark")
 
 
 def _is_dark_theme(theme_colors):
-    """Détermine si le thème est sombre à partir de la couleur de fond"""
+    """Determine if the theme is dark based on background color"""
     if not theme_colors:
-        return True  # Par défaut, thème sombre
+        return True  # Default: dark theme
     
     bg = theme_colors.get('window_bg', '#2a2a2a')
     if bg.startswith('#'):
@@ -27,10 +27,10 @@ def _is_dark_theme(theme_colors):
 
 
 def get_device_icon_path(device: dict, theme_colors=None) -> str:
-    """Retourne le chemin de l'icône appropriée pour un périphérique"""
+    """Return the appropriate icon path for a device"""
     name = (device.get('description', '') + ' ' + device.get('name', '')).lower()
     
-    # Déterminer le nom de l'icône
+    # Determine icon name
     if any(w in name for w in ['aes67', 'rtp', 'network', 'stream', 'remote']):
         icon_name = "network"
     elif any(w in name for w in ['hdmi', 'displayport', 'dp', 'nvidia']):
@@ -39,7 +39,7 @@ def get_device_icon_path(device: dict, theme_colors=None) -> str:
                                  'behringer', 'm-audio', 'steinberg', 'roland', 'yamaha',
                                  'komplete', 'apollo', 'fireface', 'babyface']):
         icon_name = "usb"
-    elif any(w in name for w in ['headphone', 'headset', 'casque', 'line-out', 'lineout',
+    elif any(w in name for w in ['headphone', 'headset', 'headphones', 'line-out', 'lineout',
                                  'jack', 'front', 'green']):
         icon_name = "headphone"
     elif device.get('type') == 'input':
@@ -47,13 +47,13 @@ def get_device_icon_path(device: dict, theme_colors=None) -> str:
     else:
         icon_name = "speaker"
     
-    # Choisir le bon dossier selon le thème
+    # Choose the right directory based on theme
     icon_dir = ICON_DIR_DARK if _is_dark_theme(theme_colors) else ICON_DIR_LIGHT
     
-    # Chercher l'icône dans le dossier approprié
+    # Look for the icon in the appropriate directory
     icon_path = os.path.join(icon_dir, f"{icon_name}.svg")
     
-    # Fallback : utiliser le dossier principal
+    # Fallback: use the main directory
     if not os.path.exists(icon_path):
         icon_path = os.path.join(ICON_DIR, f"{icon_name}.svg")
     

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Définition des thèmes de l'interface"""
+"""Interface theme definitions"""
 
 THEMES = {
     'gtk_dark': {
-        # Calculé dynamiquement depuis GTK
+        # Dynamically computed from GTK
         'titlebar_bg': None,
         'btn_bg': None,
         'btn_checked': None,
         'btn_hover': None,
         'window_bg': None,
-        # Couleurs fixes
+        # Fixed colors
         'btn_text': '#999999',
         'btn_text_checked': '#ffffff',
         'btn_text_hover': '#dddddd',
@@ -73,7 +73,7 @@ THEMES = {
 }
 
 def get_sub_btn_style(colors):
-    """Style pour les boutons de sous-onglets"""
+    """Style for sub-tab buttons"""
     return f"""
         QPushButton {{
             background-color: {colors['btn_bg']};
@@ -96,5 +96,5 @@ def get_sub_btn_style(colors):
     """
 
 def get_main_btn_style(colors):
-    """Style pour les boutons d'onglets principaux"""
+    """Style for main tab buttons"""
     return get_sub_btn_style(colors)

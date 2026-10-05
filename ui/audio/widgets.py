@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""Widgets réutilisables pour l'onglet Audio"""
+"""Reusable widgets for the Audio tab"""
 import os
 from PyQt6.QtWidgets import QSlider, QLabel, QFrame, QVBoxLayout, QStyle
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QPixmap
 from ..icon_utils import get_device_icon_path
-from ..i18n import I18n
 from ..logger import Logger
 
 
 class ClickSlider(QSlider):
-    """Slider avec clic à la volée"""
+    """Slider with click-to-seek"""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._click_dragging = False
@@ -34,13 +33,12 @@ class ClickSlider(QSlider):
 
 
 class DeviceCard(QFrame):
-    """Carte périphérique cliquable"""
+    """Clickable device card"""
     clicked = pyqtSignal(dict)
     
     def __init__(self, device, is_selected=False):
         super().__init__()
         self.device = device
-        self.i18n = I18n.instance()
         self.logger = Logger.instance()
         self._colors = None
         self.is_selected = is_selected
@@ -61,7 +59,7 @@ class DeviceCard(QFrame):
         self.icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(self.icon_lbl)
         
-        self.name_lbl = QLabel(device.get('description', 'Inconnu')[:40])
+        self.name_lbl = QLabel(device.get('description', 'Unknown')[:40])
         self.name_lbl.setFont(QFont("Monospace", 7))
         self.name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.name_lbl.setWordWrap(True)
@@ -70,7 +68,7 @@ class DeviceCard(QFrame):
         layout.addWidget(self.name_lbl)
         
         if device.get('state') == 'running':
-            badge = QLabel("● " + self.i18n.tr('active'))
+            badge = QLabel("● " + self.tr("Active"))
             badge.setFont(QFont("Monospace", 6))
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
             badge.setStyleSheet("color: #4CAF50; background: transparent;")
@@ -82,7 +80,7 @@ class DeviceCard(QFrame):
         self._apply_style()
     
     def _load_icon(self):
-        """Charge l'icône selon le thème actuel (avec cache)"""
+        """Load icon according to current theme (with cache)"""
         icon_path = get_device_icon_path(self.device, self._colors)
         if self._loaded_icon_path == icon_path:
             return
@@ -97,7 +95,7 @@ class DeviceCard(QFrame):
             self.icon_lbl.setFont(QFont("Monospace", 20))
     
     def _apply_style(self):
-        """Applique le style selon l'état sélectionné (avec cache)"""
+        """Apply style according to selected state (with cache)"""
         c = self._colors if self._colors else {}
         cache_key = (self.is_selected, str(c))
         if self._style_cache == cache_key:
@@ -115,7 +113,7 @@ class DeviceCard(QFrame):
             text = c.get('device_card_normal_text', c.get('btn_text', '#cccccc'))
             border_width = '1px'
         
-        # Pas de changement au survol pour la carte sélectionnée
+        # No hover change for selected card
         if self.is_selected:
             hover_style = ""
         else:
@@ -141,13 +139,13 @@ class DeviceCard(QFrame):
         """)
     
     def set_theme_colors(self, colors):
-        """Applique les couleurs du thème et recharge l'icône"""
+        """Apply theme colors and reload icon"""
         self._colors = colors
         self._load_icon()
         self._apply_style()
     
     def set_selected(self, selected):
-        """Change l'état sélectionné et réapplique le style"""
+        """Change selected state and reapply style"""
         self.is_selected = selected
         self.setProperty("selected", selected)
         self._apply_style()
@@ -160,7 +158,7 @@ class DeviceCard(QFrame):
 
 
 class StreamDeviceBadge(QFrame):
-    """Vignette périphérique pour flux (petite)"""
+    """Small device badge for streams"""
     clicked = pyqtSignal()
     
     def __init__(self, device, parent=None):
@@ -195,7 +193,7 @@ class StreamDeviceBadge(QFrame):
         self._load_icon()
     
     def _load_icon(self):
-        """Charge l'icône selon le thème actuel (avec cache)"""
+        """Load icon according to current theme (with cache)"""
         icon_path = get_device_icon_path(self.device, self._colors)
         if self._loaded_icon_path == icon_path:
             return
@@ -210,7 +208,7 @@ class StreamDeviceBadge(QFrame):
             self.icon_lbl.setFont(QFont("Monospace", 10))
     
     def set_theme_colors(self, colors):
-        """Applique les couleurs du thème et recharge l'icône (avec cache)"""
+        """Apply theme colors and reload icon (with cache)"""
         cache_key = str(colors)
         if self._style_cache == cache_key:
             return

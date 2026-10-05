@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
-"""Dialog de sélection de périphérique pour un flux"""
+"""Device picker dialog for a stream"""
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from .widgets import StreamDeviceBadge
-from ..i18n import I18n
 
 
 class DevicePickerDialog(QDialog):
-    """Dialog pour choisir un périphérique de sortie pour un flux"""
+    """Dialog to choose an output device for a stream"""
     
     def __init__(self, stream_name, current_device, available_devices, parent=None):
         super().__init__(parent)
-        self.i18n = I18n.instance()
         self.selected_device = None
-        self.setWindowTitle(f"Router : {stream_name}")
+        self.setWindowTitle(self.tr("Route: {stream_name}").format(stream_name=stream_name))
         self.setMinimumWidth(400)
         
         layout = QVBoxLayout(self)
         
-        title_lbl = QLabel(f"Choisir un périphérique de sortie pour :\n{stream_name}")
+        title_lbl = QLabel(self.tr("Choose an output device for:\n{stream_name}").format(stream_name=stream_name))
         title_lbl.setFont(QFont("Sans", 11, QFont.Weight.Bold))
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_lbl.setWordWrap(True)
@@ -27,23 +25,23 @@ class DevicePickerDialog(QDialog):
         
         layout.addSpacing(10)
         
-        # Grille de vignettes
+        # Badges grid
         grid_layout = QHBoxLayout()
         grid_layout.setSpacing(8)
         
-        # Vignette "Défaut" en premier
+        # "Default" badge first
         default_badge = StreamDeviceBadge({
             'name': '',
-            'description': self.i18n.tr('default_device'),
+            'description': self.tr("Default"),
             'type': 'output'
         })
         default_badge.setFixedSize(70, 70)
-        default_badge.setToolTip(self.i18n.tr('default_device_tooltip'))
+        default_badge.setToolTip(self.tr("Follow the default output device"))
         
-        # Le flux suit le défaut si current_device est vide ou None
+        # The stream follows the default if current_device is empty or None
         follows_default = (current_device == '' or current_device is None)
         
-        # Style de la vignette "Défaut"
+        # "Default" badge style
         if follows_default:
             default_badge.setStyleSheet("""
                 QFrame {
@@ -79,7 +77,7 @@ class DevicePickerDialog(QDialog):
         default_badge.clicked.connect(self._on_default_selected)
         grid_layout.addWidget(default_badge)
         
-        # Trait vertical séparateur
+        # Vertical separator
         separator = QFrame()
         separator.setFrameShape(QFrame.Shape.VLine)
         separator.setStyleSheet("QFrame { color: #555; background-color: #555; }")
@@ -87,7 +85,7 @@ class DevicePickerDialog(QDialog):
         separator.setFixedHeight(70)
         grid_layout.addWidget(separator)
         
-        # Vignettes des périphériques
+        # Device badges
         for device in available_devices:
             is_current = device['name'] == current_device
             
@@ -135,8 +133,8 @@ class DevicePickerDialog(QDialog):
         
         layout.addSpacing(10)
         
-        # Bouton annuler
-        cancel_btn = QPushButton(self.i18n.tr('cancel'))
+        # Cancel button
+        cancel_btn = QPushButton(self.tr("Cancel"))
         cancel_btn.clicked.connect(self.reject)
         layout.addWidget(cancel_btn)
     
@@ -145,5 +143,5 @@ class DevicePickerDialog(QDialog):
         self.accept()
     
     def _on_default_selected(self):
-        self.selected_device = {'name': '', 'description': self.i18n.tr('default_device')}
+        self.selected_device = {'name': '', 'description': self.tr("Default")}
         self.accept()

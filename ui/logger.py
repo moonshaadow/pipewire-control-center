@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Système de logging centralisé pour PipeWire Control Center"""
+"""Centralized logging system for PipeWire Control Center"""
 import os
 import logging
 import logging.handlers
@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 class Logger:
-    """Singleton pour la gestion centralisée des logs"""
+    """Singleton for centralized log management"""
     _instance = None
     
     def __init__(self):
@@ -15,22 +15,22 @@ class Logger:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.log_file = self.log_dir / 'app.log'
         
-        # Configuration du logger principal
+        # Main logger configuration
         self.logger = logging.getLogger('PipeWireControlCenter')
         self.logger.setLevel(logging.DEBUG)
         
-        # Éviter les doublons si déjà configuré
+        # Avoid duplicates if already configured
         if not self.logger.handlers:
-            # Handler fichier avec rotation
+            # File handler with rotation
             file_handler = logging.handlers.RotatingFileHandler(
                 self.log_file,
-                maxBytes=1_000_000,  # 1 Mo
+                maxBytes=1_000_000,  # 1 MB
                 backupCount=5,
                 encoding='utf-8'
             )
             file_handler.setLevel(logging.DEBUG)
             
-            # Format détaillé
+            # Detailed format
             formatter = logging.Formatter(
                 '%(asctime)s [%(levelname)s] %(module)s.%(funcName)s: %(message)s',
                 datefmt='%Y-%m-%d %H:%M:%S'
@@ -67,10 +67,10 @@ class Logger:
         return str(self.log_file)
     
     def clear_logs(self):
-        """Efface tous les fichiers de log"""
+        """Clear all log files"""
         try:
             for f in self.log_dir.glob('*.log*'):
                 f.unlink()
-            self.logger.info("Logs effacés")
+            self.logger.info("Logs cleared")
         except Exception as e:
-            self.logger.error(f"Erreur lors de l'effacement des logs: {e}")
+            self.logger.error(f"Error clearing logs: {e}")
