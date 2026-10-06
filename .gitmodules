@@ -1,0 +1,3 @@
+[submodule "libs/pw-bridge"]
+	path = libs/pw-bridge
+	url = https://github.com/moonshaadow/pw-bridge
